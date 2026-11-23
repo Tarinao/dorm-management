@@ -1,0 +1,11 @@
+// Cloudflare Workers deployment: serves the built app (dist/) as static files.
+// Build: `npm run build` (needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY as *build* variables).
+// Deploy: `npx wrangler deploy`   Preview (other branches): `npx wrangler versions upload`
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dorm-management",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
