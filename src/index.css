@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------- */
+/* Design tokens — same palette as the original, light + dark.            */
+/* ---------------------------------------------------------------------- */
+:root {
+  --ink: #21262B; --ink-soft: #454C55; --paper: #F6F3EC; --paper-raised: #FFFFFF;
+  --line: #DAD3C3; --muted: #726C5E;
+  --teal: #2F6F6D; --teal-soft: #E4EEED;
+  --amber: #A9762E; --amber-soft: #F3E8D6;
+  --terracotta: #B14A34; --terracotta-soft: #F5E1DC;
+  --sage: #4F6E47; --sage-soft: #E7EDE2;
+  /* derived component tokens */
+  --btn: var(--ink); --btn-fg: var(--paper);
+  --sidebar: var(--ink); --sidebar-fg: var(--paper);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EDE9E0; --ink-soft: #C9C4B7; --paper: #1B1E22; --paper-raised: #252A30;
+    --line: #3A4048; --muted: #9B9587;
+    --teal: #6FBAB6; --teal-soft: #20302F;
+    --amber: #D7A85B; --amber-soft: #332A18;
+    --terracotta: #E08871; --terracotta-soft: #3A241E;
+    --sage: #93B989; --sage-soft: #25301F;
+    --btn: var(--teal); --btn-fg: #0D1412;
+    --sidebar: #111417; --sidebar-fg: #EDE9E0;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #EDE9E0; --ink-soft: #C9C4B7; --paper: #1B1E22; --paper-raised: #252A30;
+  --line: #3A4048; --muted: #9B9587;
+  --teal: #6FBAB6; --teal-soft: #20302F;
+  --amber: #D7A85B; --amber-soft: #332A18;
+  --terracotta: #E08871; --terracotta-soft: #3A241E;
+  --sage: #93B989; --sage-soft: #25301F;
+  --btn: var(--teal); --btn-fg: #0D1412;
+  --sidebar: #111417; --sidebar-fg: #EDE9E0;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta-soft: var(--terracotta-soft);
+  --color-sage: var(--sage);
+  --color-sage-soft: var(--sage-soft);
+  --color-btn: var(--btn);
+  --color-btn-fg: var(--btn-fg);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+}
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'IBM Plex Sans', 'Noto Sans Thai', -apple-system, sans-serif;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Element defaults (things every input / table / heading shares).        */
+/* ---------------------------------------------------------------------- */
+@layer base {
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body);
+    font-size: 14.5px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
+  [lang="th"] h1, [lang="th"] h2, [lang="th"] h3 { font-family: 'Noto Sans Thai', var(--font-body); }
+  button { font-family: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  input, select, textarea {
+    font-family: inherit; font-size: 14px; color: var(--ink); background: var(--paper-raised);
+    border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+  ::placeholder { color: var(--muted); opacity: 0.8; }
+  textarea { resize: vertical; min-height: 56px; }
+
+  /* 16px inputs on phones: smaller text makes iOS zoom in on every tap. */
+  @media (max-width: 760px) { input, select, textarea { font-size: 16px; padding: 10px 11px; } }
+  input:disabled, select:disabled, textarea:disabled { opacity: 0.6; }
+
+  th {
+    text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.05em; padding: 0 10px 10px 0; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 12px 10px 12px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Printing (receipts): hide app chrome, print on white.                  */
+/* ---------------------------------------------------------------------- */
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; color: #000; padding: 0; }
+  .print-area { border: none !important; box-shadow: none !important; margin: 0 !important; max-width: none !important; }
+  @page { margin: 14mm; }
+}

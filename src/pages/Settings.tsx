@@ -1,0 +1,115 @@
+import { useState, type FormEvent } from 'react';
+import { getSettings, listProfiles, setRole, updateSettings, type Profile, type Settings as SettingsRow } from '../lib/api';
+import { useAuth } from '../lib/auth';
+import { useFeedback } from '../lib/feedback';
+import { parseNum } from '../lib/format';
+import { friendlyError, useI18n } from '../lib/i18n';
+import { useLoad } from '../lib/useLoad';
+import { LoadState, NumInput } from '../components/common';
+import { Btn, DataTable, Desc, Field, FormGrid, PageHead, Panel, PanelTitle } from '../components/ui';
+
+/** Admin only (guarded in App.tsx and enforced by RLS). */
+export default function Settings() {
+  const { t } = useI18n();
+  const { data, error, loading, reload } = useLoad(async () => {
+    const [settings, profiles] = await Promise.all([getSettings(), listProfiles()]);
+    return { settings, profiles };
+  }, []);
+
+  return (
+    <>
+      <PageHead title={t('settings.title')} sub={t('settings.subtitle')} />
+      <LoadState loading={loading && !data} error={error} onRetry={reload}>
+        {data && (
+          <>
+            <RatesForm key={data.settings.updated_at} s={data.settings} onSaved={reload} />
+            <StaffList profiles={data.profiles} onSaved={reload} />
+          </>
+        )}
+      </LoadState>
+    </>
+  );
+}
+
+function RatesForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const [busy, setBusy] = useState(false);
+
+  const save = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    const f = new FormData(ev.currentTarget);
+    const wOld = parseNum(f.get('water_price_old')), wNew = parseNum(f.get('water_price_new'));
+    const elec = parseNum(f.get('electric_rate')), due = parseNum(f.get('due_day'));
+    const name = String(f.get('dorm_name') ?? '').trim();
+    if (!name || wOld === null || wOld < 0 || wNew === null || wNew < 0 || elec === null || elec < 0 || due === null || !Number.isInteger(due) || due < 1 || due > 28) {
+      toast(t('err.check'), 'error'); return;
+    }
+    setBusy(true);
+    try {
+      await updateSettings({ dorm_name: name, water_price_old: wOld, water_price_new: wNew, electric_rate: elec, due_day: due });
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Panel>
+      <form onSubmit={save}>
+        <FormGrid>
+          <Field label={t('settings.dorm_name')}><input name="dorm_name" required defaultValue={s.dorm_name} /></Field>
+          <Field label={t('settings.water_price_old')} hint={t('settings.water_hint')}>
+            <NumInput name="water_price_old" required defaultValue={s.water_price_old} />
+          </Field>
+          <Field label={t('settings.water_price_new')}><NumInput name="water_price_new" required defaultValue={s.water_price_new} /></Field>
+          <Field label={t('settings.electric_rate')}><NumInput name="electric_rate" required defaultValue={s.electric_rate} /></Field>
+          <Field label={t('settings.due_day')} hint={t('settings.due_day_hint')}>
+            <input name="due_day" type="number" min={1} max={28} step={1} required defaultValue={s.due_day} />
+          </Field>
+        </FormGrid>
+        <Desc>{t('settings.rates_note')}</Desc>
+        <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.save')}</Btn>
+      </form>
+    </Panel>
+  );
+}
+
+function StaffList({ profiles, onSaved }: { profiles: Profile[]; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { profile: me } = useAuth();
+  const { toast } = useFeedback();
+
+  const change = async (p: Profile, value: string) => {
+    try {
+      await setRole(p.id, value === 'admin' || value === 'staff' ? value : null);
+      toast(t('settings.role_saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); }
+  };
+
+  return (
+    <Panel>
+      <PanelTitle>{t('settings.staff_title')}</PanelTitle>
+      <Desc>{t('settings.staff_hint')}</Desc>
+      <DataTable>
+        <thead><tr><th>{t('login.email')}</th><th>{t('common.name')}</th><th>{t('settings.role')}</th></tr></thead>
+        <tbody>
+          {profiles.map((p) => (
+            <tr key={p.id}>
+              <td className="break-all">{p.email} {p.id === me?.id && <span className="text-muted">{t('settings.you')}</span>}</td>
+              <td>{p.full_name}</td>
+              <td>
+                {/* You cannot remove your own admin access, so the dorm is never left without an owner. */}
+                <select value={p.role ?? ''} disabled={p.id === me?.id} onChange={(e) => void change(p, e.target.value)}>
+                  <option value="">{t('settings.role_none')}</option>
+                  <option value="staff">{t('settings.role_staff')}</option>
+                  <option value="admin">{t('settings.role_admin')}</option>
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+    </Panel>
+  );
+}
