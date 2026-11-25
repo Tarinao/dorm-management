@@ -2,16 +2,19 @@ import type { ComponentType } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useI18n, type TKey } from '../lib/i18n';
-import { IconBuilding, IconGauge, IconGlobe, IconLogout, IconReceipt, IconSettings, Logo } from './icons';
+import { IconBuilding, IconChart, IconGauge, IconGlobe, IconHelp, IconLogout, IconReceipt, IconSettings, IconWallet, Logo } from './icons';
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 interface NavItem { to: string; key: TKey; icon: Icon; adminOnly?: boolean; mobileBar?: boolean }
 
 /** Pages in menu order. `mobileBar` items sit in the phone's bottom bar; the rest are in the top bar. */
 export const NAV: NavItem[] = [
+  { to: '/dashboard', key: 'nav.dashboard', icon: IconChart, mobileBar: true },
   { to: '/rooms', key: 'nav.rooms', icon: IconBuilding, mobileBar: true },
   { to: '/meters', key: 'nav.meters', icon: IconGauge, mobileBar: true },
   { to: '/billing', key: 'nav.billing', icon: IconReceipt, mobileBar: true },
+  { to: '/payments', key: 'nav.bills', icon: IconWallet, mobileBar: true },
+  { to: '/guide', key: 'nav.guide', icon: IconHelp },
   { to: '/settings', key: 'nav.settings', icon: IconSettings, adminOnly: true },
 ];
 

@@ -11,11 +11,15 @@ import RoomDetail from './pages/RoomDetail';
 import Meters from './pages/Meters';
 import Billing from './pages/Billing';
 import Settings from './pages/Settings';
+import Dashboard from './pages/Dashboard';
+import Payments from './pages/Payments';
+import Receipt from './pages/Receipt';
+import Guide from './pages/Guide';
 
 /** Staff who type /settings are sent back; the database refuses their writes anyway. */
 function AdminOnly({ children }: { children: ReactNode }) {
   const { isAdmin } = useAuth();
-  return isAdmin ? <>{children}</> : <Navigate to="/rooms" replace state={{ denied: true }} />;
+  return isAdmin ? <>{children}</> : <Navigate to="/dashboard" replace state={{ denied: true }} />;
 }
 
 export default function App() {
@@ -42,13 +46,17 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/rooms" replace />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="rooms" element={<Rooms />} />
         <Route path="rooms/:number" element={<RoomDetail />} />
         <Route path="meters" element={<Meters />} />
         <Route path="billing" element={<Billing />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="receipts/:id" element={<Receipt />} />
+        <Route path="guide" element={<Guide />} />
         <Route path="settings" element={<AdminOnly><Settings /></AdminOnly>} />
-        <Route path="*" element={<Navigate to="/rooms" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
   );

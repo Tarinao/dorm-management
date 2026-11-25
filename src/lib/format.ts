@@ -3,6 +3,9 @@
 
 export type Lang = 'th' | 'en';
 
+/** "101 (Nok)": nickname, else first name. Shared with the LINE Edge Functions. */
+export { tenantLabel, tenantShort } from '../../supabase/functions/_shared/core';
+
 const MONTHS: Record<Lang, string[]> = {
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
   th: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],

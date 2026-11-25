@@ -1,0 +1,12 @@
+# Supabase CLI settings for this project (only the parts this app needs).
+project_id = "fetettlfpbndmhueqaxd"
+
+# LINE calls this webhook without a Supabase token, so the gateway must not require one.
+# The function itself rejects every request whose x-line-signature does not match
+# LINE_CHANNEL_SECRET.
+[functions.line-webhook]
+verify_jwt = false
+
+# Called by the app (Approve / Reject): only logged-in users.
+[functions.line-link]
+verify_jwt = true

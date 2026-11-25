@@ -1,9 +1,17 @@
 /* Generated from the live Supabase schema (Supabase MCP generate_typescript_types, 2026-11-23),
  * then updated for migration 20261123140852_water_per_person.sql (marked "0006"; checked against regenerated types after it was applied)
- * and 20261123151116_no_water_meter.sql (marked "0007": the water reading is optional).
+ * and 20261123151116_no_water_meter.sql (marked "0007": the water reading is optional)
+ * and 20261124144201_line_linking.sql (marked "0009", hand-written; applied 2026-11-24).
  * Hand edits marked "edited": move_in's p_tenant_id and p_end_date accept null
  * (the SQL function handles null; the generator cannot tell).
  * Regenerate after any schema change. */
+
+/* 0009 */
+type PaySettings = {
+  promptpay_id: string; bank_name: string; bank_branch: string; bank_account_name: string; bank_account_number: string;
+  office_location: string; office_hours: string; auto_send_enabled: boolean;
+};
+type TenantLine = { nickname: string; line_user_id: string | null; line_display_name: string; line_linked_at: string | null };
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -98,15 +106,35 @@ export type Database = {
         Relationships: [];
       };
       settings: {
-        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number }; // 0006
-        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number };
-        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number };
+        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number } & PaySettings; // 0006, 0009
+        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number } & Partial<PaySettings>;
+        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number } & Partial<PaySettings>;
         Relationships: [];
       };
+      line_link_requests: { // 0009
+        Row: {
+          created_at: string; decided_at: string | null; decided_by: string | null; id: string;
+          line_display_name: string; line_picture_url: string; line_user_id: string;
+          room_number_typed: string; status: string; tenant_id: string | null;
+        };
+        Insert: {
+          created_at?: string; decided_at?: string | null; decided_by?: string | null; id?: string;
+          line_display_name?: string; line_picture_url?: string; line_user_id: string;
+          room_number_typed: string; status?: string; tenant_id?: string | null;
+        };
+        Update: {
+          created_at?: string; decided_at?: string | null; decided_by?: string | null; id?: string;
+          line_display_name?: string; line_picture_url?: string; line_user_id?: string;
+          room_number_typed?: string; status?: string; tenant_id?: string | null;
+        };
+        Relationships: [
+          { foreignKeyName: 'line_link_requests_tenant_id_fkey'; columns: ['tenant_id']; isOneToOne: false; referencedRelation: 'tenants'; referencedColumns: ['id'] },
+        ];
+      };
       tenants: {
-        Row: { created_at: string; emergency_name: string; emergency_phone: string; full_name: string; id: string; id_card_ref: string; notes: string; phone: string };
-        Insert: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name: string; id?: string; id_card_ref?: string; notes?: string; phone?: string };
-        Update: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name?: string; id?: string; id_card_ref?: string; notes?: string; phone?: string };
+        Row: { created_at: string; emergency_name: string; emergency_phone: string; full_name: string; id: string; id_card_ref: string; notes: string; phone: string } & TenantLine; // 0009
+        Insert: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name: string; id?: string; id_card_ref?: string; notes?: string; phone?: string } & Partial<TenantLine>;
+        Update: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name?: string; id?: string; id_card_ref?: string; notes?: string; phone?: string } & Partial<TenantLine>;
         Relationships: [];
       };
     };
@@ -129,6 +157,11 @@ export type Database = {
     };
     Functions: {
       app_role: { Args: never; Returns: string };
+      approve_line_request: { // 0009
+        Args: { p_request_id: string };
+        Returns: { line_user_id: string; room_number: string; tenant_full_name: string; tenant_nickname: string; line_display_name: string; previous_room: string | null }[];
+      };
+      reject_line_request: { Args: { p_request_id: string }; Returns: { line_user_id: string; room_number_typed: string }[] }; // 0009
       generate_bills: { Args: { p_month: string }; Returns: { new_bill_id: string; outcome: string; room_number: string }[] };
       is_admin: { Args: never; Returns: boolean };
       is_member: { Args: never; Returns: boolean };

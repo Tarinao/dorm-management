@@ -3,7 +3,7 @@
  * database functions, so they either fully happen or not at all. */
 import { sb } from './supabase';
 import type { Tables, Views } from './database.types';
-import { addMonths, byRoomNumber, monthEnd } from './format';
+import { addMonths, byRoomNumber, monthEnd, tenantShort } from './format';
 import type { ContractLite, Reading } from './billing';
 
 export type Room = Tables<'rooms'>;
@@ -14,6 +14,7 @@ export type Profile = Tables<'profiles'>;
 export type BillExtra = Tables<'bill_extras'>;
 export type Payment = Tables<'payments'>;
 export type BillSummary = Views<'bill_summary'>;
+export type LineRequest = Tables<'line_link_requests'>;
 export type ContractWithTenant = Contract & { tenants: Tenant | null };
 export type RoomWithCurrent = Room & { current: ContractWithTenant | null };
 
@@ -34,7 +35,9 @@ export async function getSettings(): Promise<Settings> {
   return mustOne(await sb.from('settings').select('*').eq('id', 1).single());
 }
 
-export async function updateSettings(patch: Partial<Pick<Settings, 'dorm_name' | 'water_price_old' | 'water_price_new' | 'electric_rate' | 'due_day'>>) {
+export type SettingsPatch = Partial<Omit<Settings, 'id' | 'updated_at'>>;
+
+export async function updateSettings(patch: SettingsPatch) {
   const rows = must(await sb.from('settings').update(patch).eq('id', 1).select('id'));
   if (!rows || rows.length === 0) throw { code: '42501', message: 'permission denied' };
 }
@@ -132,7 +135,7 @@ export async function loadMonth(month: string): Promise<MonthData> {
   const end = monthEnd(month);
   const [rooms, contracts, readings, bills] = await Promise.all([
     sb.from('rooms').select('*'),
-    sb.from('contracts').select('id, room_id, start_date, moved_out_on, monthly_rent, created_at, tenants(full_name)')
+    sb.from('contracts').select('id, room_id, start_date, moved_out_on, monthly_rent, created_at, tenants(full_name, nickname)')
       .lte('start_date', end).or(`moved_out_on.is.null,moved_out_on.gte.${month}`),
     sb.from('meter_readings').select('id, room_id, kind, month, read_on, water, electric, created_at')
       .gte('month', addMonths(month, -12)).lte('read_on', end),
@@ -140,7 +143,8 @@ export async function loadMonth(month: string): Promise<MonthData> {
   ]);
   return {
     rooms: (must(rooms) ?? []).sort((a, b) => byRoomNumber(a.number, b.number)),
-    contracts: (must(contracts) ?? []).map(({ tenants, ...c }) => ({ ...c, tenant_name: tenants?.full_name ?? '' })),
+    // tenant_name here is the short name shown as "101 (Nok)" (nickname, else first name).
+    contracts: (must(contracts) ?? []).map(({ tenants, ...c }) => ({ ...c, tenant_name: tenantShort(tenants) })),
     readings: must(readings) ?? [],
     billedRoomIds: new Set((must(bills) ?? []).map((b) => b.room_id)),
   };
@@ -158,12 +162,15 @@ export async function generateBills(month: string) {
 }
 
 /* ------------------------------------------------------------------ bills */
-export async function listBillsForMonth(month: string): Promise<(BillSummary & { extras: BillExtra[] })[]> {
+export async function listBillsForMonth(month: string): Promise<(BillSummary & { extras: BillExtra[]; payments: Payment[] })[]> {
   const bills = must(await sb.from('bill_summary').select('*').eq('month', month)) ?? [];
   const ids = bills.map((b) => b.id!).filter(Boolean);
-  const extras = ids.length ? (must(await sb.from('bill_extras').select('*').in('bill_id', ids).order('created_at')) ?? []) : [];
+  const [extras, payments] = await Promise.all([
+    ids.length ? sb.from('bill_extras').select('*').in('bill_id', ids).order('created_at').then(must) : Promise.resolve([]),
+    listPayments(ids),
+  ]);
   return bills
-    .map((b) => ({ ...b, extras: extras.filter((x) => x.bill_id === b.id) }))
+    .map((b) => ({ ...b, extras: (extras ?? []).filter((x) => x.bill_id === b.id), payments: payments.filter((p) => p.bill_id === b.id) }))
     .sort((a, b) => byRoomNumber(a.room_number ?? '', b.room_number ?? ''));
 }
 
@@ -189,4 +196,126 @@ export async function listProfiles(): Promise<Profile[]> {
 
 export async function setRole(id: string, role: 'admin' | 'staff' | null) {
   must(await sb.from('profiles').update({ role }).eq('id', id).select('id').single());
+}
+
+/* ------------------------------------------------------------------ payments */
+export type BillRow = BillSummary & { tenant_name: string; tenant_short: string };
+
+/** Tenant for each bill (bills keep the contract they were made for): full name, and the
+ *  short name used in "101 (Nok)". */
+async function withTenants<T extends { contract_id: string | null }>(bills: T[]): Promise<(T & { tenant_name: string; tenant_short: string })[]> {
+  const ids = [...new Set(bills.map((b) => b.contract_id).filter((x): x is string => !!x))];
+  const rows = ids.length ? (must(await sb.from('contracts').select('id, tenants(full_name, nickname)').in('id', ids)) ?? []) : [];
+  const byId = new Map(rows.map((r) => [r.id, r.tenants]));
+  return bills.map((b) => {
+    const tn = b.contract_id ? byId.get(b.contract_id) : null;
+    return { ...b, tenant_name: tn?.full_name ?? '', tenant_short: tenantShort(tn) };
+  });
+}
+
+export type BillFilter = 'overdue' | 'open' | 'paid' | 'all';
+
+/** Bills across all months, newest first. 'open' = unpaid or partly paid. */
+export async function listBills(filter: BillFilter, roomId?: string): Promise<BillRow[]> {
+  let q = sb.from('bill_summary').select('*').order('month', { ascending: false });
+  if (roomId) q = q.eq('room_id', roomId);
+  if (filter === 'overdue') q = q.eq('is_overdue', true);
+  if (filter === 'open') q = q.neq('status', 'paid');
+  if (filter === 'paid') q = q.eq('status', 'paid');
+  const bills = (must(await q.limit(500)) ?? []).sort((a, b) =>
+    (b.month ?? '').localeCompare(a.month ?? '') || byRoomNumber(a.room_number ?? '', b.room_number ?? ''));
+  return withTenants(bills);
+}
+
+/** Payments for some bills, oldest first. */
+export async function listPayments(billIds: string[]): Promise<Payment[]> {
+  if (billIds.length === 0) return [];
+  const out: Payment[] = [];
+  for (let i = 0; i < billIds.length; i += 150) {   // keep the URL short
+    out.push(...(must(await sb.from('payments').select('*').in('bill_id', billIds.slice(i, i + 150))
+      .order('paid_on').order('created_at')) ?? []));
+  }
+  return out;
+}
+
+export interface PaymentInput { billId: string; amount: number; paidOn: string; method: 'cash' | 'transfer'; note: string }
+
+/** Returns the new payment (with its receipt number). The database refuses more than the balance. */
+export async function recordPayment(x: PaymentInput): Promise<Payment> {
+  return mustOne(await sb.from('payments')
+    .insert({ bill_id: x.billId, amount: x.amount, paid_on: x.paidOn, method: x.method, note: x.note.trim() })
+    .select('*').single());
+}
+
+/** Admin only (RLS). Returns false when nothing was deleted. */
+export async function deletePayment(id: string): Promise<boolean> {
+  const rows = must(await sb.from('payments').delete().eq('id', id).select('id'));
+  return (rows?.length ?? 0) > 0;
+}
+
+/** Everything a printed receipt shows. */
+export async function getReceipt(paymentId: string) {
+  const payment = must(await sb.from('payments').select('*').eq('id', paymentId).maybeSingle());
+  if (!payment) return null;
+  const [bill, extras, all, settings] = await Promise.all([
+    sb.from('bill_summary').select('*').eq('id', payment.bill_id).single(),
+    sb.from('bill_extras').select('*').eq('bill_id', payment.bill_id).order('created_at'),
+    sb.from('payments').select('*').eq('bill_id', payment.bill_id).order('paid_on').order('created_at'),
+    getSettings(),
+  ]);
+  const [b] = await withTenants([mustOne(bill)]);
+  const payments = must(all) ?? [];
+  // Balance right after this payment: everything paid up to and including it.
+  const upto = payments.slice(0, payments.findIndex((p) => p.id === payment.id) + 1);
+  const paidSoFar = upto.reduce((s, p) => s + Number(p.amount), 0);
+  return {
+    payment, bill: b, extras: must(extras) ?? [], settings,
+    paidBefore: paidSoFar - Number(payment.amount),
+    balanceAfter: Math.round((Number(b.total) - paidSoFar) * 100) / 100,
+  };
+}
+
+/* ------------------------------------------------------------------ dashboard */
+export async function loadDashboard() {
+  const [rooms, bills] = await Promise.all([
+    sb.from('rooms').select('id, number, status'),
+    sb.from('bill_summary').select('id, room_id, room_number, contract_id, month, total, paid, balance, status, is_overdue, due_date'),
+  ]);
+  const withNames = await withTenants(must(bills) ?? []);
+  // The dashboard shows "101 (Nok)", so it gets the short name.
+  return { rooms: must(rooms) ?? [], bills: withNames.map((b) => ({ ...b, tenant_name: b.tenant_short })) };
+}
+
+/* ------------------------------------------------------------------ LINE */
+export async function listLineRequests(): Promise<LineRequest[]> {
+  return must(await sb.from('line_link_requests').select('*').eq('status', 'pending').order('created_at')) ?? [];
+}
+
+export interface LineDecision {
+  room_number: string; label?: string; line_display_name?: string; previous_room?: string | null;
+  pushed: boolean; push_error?: string;
+}
+
+/** Approve / reject run in the line-link Edge Function (it holds the LINE token and sends the
+ *  tenant a message); the database part runs as the logged-in user, under RLS. */
+export async function decideLineRequest(action: 'approve' | 'reject', requestId: string): Promise<LineDecision> {
+  const { data, error } = await sb.functions.invoke<LineDecision>('line-link', { body: { action, request_id: requestId } });
+  if (error) {
+    // The function answers { error: 'ROOM_HAS_NO_TENANT' | ... }; turn it into a normal error message.
+    let code = '';
+    try { code = (await (error as { context?: Response }).context?.json())?.error ?? ''; } catch { /* not JSON */ }
+    throw { message: code || error.message };
+  }
+  return data!;
+}
+
+/** Remove the LINE link from a tenant (e.g. linked by mistake). */
+export async function unlinkLine(tenantId: string) {
+  await updateTenant(tenantId, { line_user_id: null, line_display_name: '', line_linked_at: null });
+}
+
+/** Move-in creates the tenant inside move_in(); the nickname is saved right after. */
+export async function setNicknameForContract(contractId: string, nickname: string) {
+  const c = mustOne(await sb.from('contracts').select('tenant_id').eq('id', contractId).single());
+  await updateTenant(c.tenant_id, { nickname });
 }

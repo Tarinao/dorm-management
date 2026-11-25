@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import {
   addExtra, deleteBill, deleteExtra, generateBills, getSettings, listBillsForMonth, loadMonth,
-  type BillExtra, type BillSummary,
+  type BillExtra, type BillSummary, type Payment,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { previewMonth } from '../lib/billing';
@@ -11,11 +11,13 @@ import { currentMonth, fromMonthInput, meter, monthEnd, parseNum, toMonthInput }
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, NumInput, StatusPill } from '../components/common';
+import { PaymentDialog, PaymentHistory } from '../components/Payments';
 import { RoomPricesEditor } from '../components/RoomPrices';
 import { AlertBar, Btn, Desc, Empty, Field, PageHead, Panel, PanelTitle } from '../components/ui';
 
 export default function Billing() {
   const { t, money, month: monthName } = useI18n();
+  const { isAdmin } = useAuth();
   const { toast, confirm } = useFeedback();
   const [month, setMonth] = useState(currentMonth);
   const [busy, setBusy] = useState(false);
@@ -77,7 +79,7 @@ export default function Billing() {
                   {busy ? t('billing.generating') : ready.length ? t('billing.generate', { n: ready.length }) : t('billing.generate_none')}
                 </Btn>
               </div>
-              <Desc className="mt-0 mb-3">{t('billing.prices_hint')}</Desc>
+              <Desc className="mt-0 mb-3">{t(isAdmin ? 'billing.prices_hint' : 'billing.prices_hint_staff')}</Desc>
               {preview.length === 0 ? <Empty>{t('meters.empty')}</Empty> : (
                 <div className="flex flex-col gap-3">
                   {preview.map((r) => {
@@ -88,7 +90,7 @@ export default function Billing() {
                         <div className="flex items-baseline justify-between gap-2 flex-wrap mb-2">
                           <div>
                             <strong className="font-display text-lg mr-2">{r.roomNumber}</strong>
-                            <span className="text-muted text-[13px]">{tenantOf(r.roomId)}</span>
+                            {tenantOf(r.roomId) && <span className="text-muted text-[13px]">({tenantOf(r.roomId)})</span>}
                           </div>
                           <span className={`text-[13px] font-semibold ${r.outcome === 'created' ? 'text-sage' : r.outcome === 'already_billed' ? 'text-muted' : 'text-terracotta'}`}>
                             {t(`billing.outcome.${r.outcome}` as TKey)}
@@ -126,11 +128,13 @@ export default function Billing() {
   );
 }
 
-function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: BillExtra[] }; tenant: string; onChanged: () => void }) {
+function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: BillExtra[]; payments: Payment[] }; tenant: string; onChanged: () => void }) {
   const { t, money, date } = useI18n();
   const { isAdmin } = useAuth();
   const { toast, confirm } = useFeedback();
   const [adding, setAdding] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const open = Number(bill.balance ?? 0) > 0;
   const status = bill.is_overdue ? 'overdue' : bill.status;
 
   const add = async (ev: FormEvent<HTMLFormElement>) => {
@@ -175,7 +179,7 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <Link to={`/rooms/${encodeURIComponent(bill.room_number ?? '')}`} className="font-display text-xl font-semibold text-ink no-underline">{bill.room_number}</Link>
-          <span className="text-[13px] text-ink-soft ml-2">{tenant}</span>
+          {tenant && <span className="text-[13px] text-ink-soft ml-1">({tenant})</span>}
           <div className="text-[12px] text-muted">{t('billing.due', { date: date(bill.due_date) })}</div>
         </div>
         <StatusPill status={status} />
@@ -196,6 +200,14 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
       <div className="flex justify-between gap-3 pt-2 mt-1 border-t border-line font-semibold">
         <span>{t('common.total')}</span><span className="tabular-nums">{money(bill.total)}</span>
       </div>
+      {Number(bill.paid) > 0 && (
+        <div className="flex justify-between gap-3 py-1 text-[13.5px] text-ink-soft">
+          <span>{t('pay.paid_amount')} {money(bill.paid)}</span>
+          <span className={`tabular-nums font-semibold ${open ? 'text-terracotta' : 'text-sage'}`}>{t('pay.balance')} {money(bill.balance)}</span>
+        </div>
+      )}
+      <PaymentHistory payments={bill.payments} onChanged={onChanged} />
+      {paying && <PaymentDialog bill={bill} onClose={() => setPaying(false)} />}
 
       {adding ? (
         <form onSubmit={add} className="grid grid-cols-[1fr_110px] gap-2 mt-3 items-end">
@@ -208,6 +220,7 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
         </form>
       ) : (
         <div className="flex gap-2 mt-3 flex-wrap">
+          {open && <Btn small onClick={() => setPaying(true)}>{t('pay.record')}</Btn>}
           <Btn small variant="secondary" onClick={() => setAdding(true)}>{t('billing.add_extra')}</Btn>
           {isAdmin && Number(bill.paid) === 0 && <Btn small variant="danger" onClick={() => void removeBill()}>{t('billing.delete_bill')}</Btn>}
         </div>

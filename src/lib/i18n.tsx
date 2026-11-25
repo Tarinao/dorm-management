@@ -214,6 +214,88 @@ const D = {
   'billing.due': ['Due {date}', 'ครบกำหนด {date}'],
   'billing.open_room': ['Open room', 'ดูห้อง'],
 
+  'billing.prices_hint_staff': ['Rent, water price and people come from each room. Only the owner can change them.', 'ค่าเช่า ค่าน้ำ และจำนวนคน ใช้ตามที่ตั้งไว้ในแต่ละห้อง เฉพาะเจ้าของหอเท่านั้นที่เปลี่ยนได้'],
+
+  // ---- prices are admin-only
+  'price.admin_only': ['Only the owner can change prices.', 'เฉพาะเจ้าของหอเท่านั้นที่เปลี่ยนราคาได้'],
+  'price.summary': ['Rent {rent} · Water {w} × {n} people', 'ค่าเช่า {rent} · ค่าน้ำ {w} × {n} คน'],
+  'movein.prices_from_room': ['Rent and water price come from the room. Only the owner can change them.', 'ค่าเช่าและค่าน้ำใช้ตามที่ตั้งไว้ในห้อง เฉพาะเจ้าของหอเท่านั้นที่เปลี่ยนได้'],
+
+  // ---- payments
+  'pay.title': ['Payments', 'รับชำระเงิน'],
+  'pay.subtitle': ['Record what tenants pay and print receipts. Overdue bills are shown first.', 'บันทึกการชำระเงินและพิมพ์ใบเสร็จ บิลที่เกินกำหนดแสดงก่อน'],
+  'pay.filter.overdue': ['Overdue', 'เกินกำหนด'],
+  'pay.filter.open': ['Not fully paid', 'ยังชำระไม่ครบ'],
+  'pay.filter.paid': ['Paid', 'ชำระแล้ว'],
+  'pay.filter.all': ['All bills', 'ทุกบิล'],
+  'pay.search': ['Search room or tenant', 'ค้นหาห้องหรือชื่อผู้เช่า'],
+  'pay.record': ['Record payment', 'รับชำระเงิน'],
+  'pay.dialog_title': ['Record payment — room {n}', 'รับชำระเงิน — ห้อง {n}'],
+  'pay.bill_of': ['Bill for {month}', 'บิลเดือน{month}'],
+  'pay.balance': ['Balance', 'ค้างชำระ'],
+  'pay.paid_amount': ['Paid', 'ชำระแล้ว'],
+  'pay.amount': ['Amount received (฿)', 'จำนวนเงินที่รับ (บาท)'],
+  'pay.amount_hint': ['Less than the balance = partial payment', 'น้อยกว่ายอดค้าง = ชำระบางส่วน'],
+  'pay.date': ['Payment date', 'วันที่ชำระ'],
+  'pay.method': ['Method', 'ช่องทาง'],
+  'pay.cash': ['Cash', 'เงินสด'],
+  'pay.transfer': ['Transfer', 'โอนเงิน'],
+  'pay.imported': ['Imported', 'นำเข้าจากระบบเก่า'],
+  'pay.save': ['Save payment', 'บันทึกการชำระ'],
+  'pay.done': ['Payment saved. Receipt {no}.', 'บันทึกแล้ว ใบเสร็จเลขที่ {no}'],
+  'pay.too_much': ['More than the balance ({b}).', 'มากกว่ายอดค้าง ({b})'],
+  'pay.history': ['Payments', 'ประวัติการชำระ'],
+  'pay.receipt': ['Receipt', 'ใบเสร็จ'],
+  'pay.delete_title': ['Delete payment {no}?', 'ลบการชำระ {no}?'],
+  'pay.delete_body': ['Only for mistakes. The bill goes back to unpaid or partly paid, and the receipt becomes invalid.', 'ใช้เมื่อบันทึกผิดเท่านั้น บิลจะกลับเป็นยังไม่ชำระหรือชำระบางส่วน และใบเสร็จนี้จะใช้ไม่ได้'],
+  'pay.empty': ['No bills in this list.', 'ไม่มีบิลในรายการนี้'],
+  'pay.count': ['{n} bills · balance {amount}', '{n} บิล · ค้างชำระ {amount}'],
+  'pay.room_bills': ['Bills and payments', 'บิลและการชำระเงิน'],
+  'pay.room_bills_empty': ['No bills for this room yet.', 'ห้องนี้ยังไม่มีบิล'],
+  'pay.show_older': ['Show older bills', 'แสดงบิลเก่า'],
+
+  // ---- receipt
+  'receipt.title': ['Receipt', 'ใบเสร็จรับเงิน'],
+  'receipt.no': ['Receipt no.', 'เลขที่'],
+  'receipt.date': ['Date', 'วันที่'],
+  'receipt.received_from': ['Received from', 'ได้รับเงินจาก'],
+  'receipt.for': ['Room {n} · {month}', 'ห้อง {n} · ประจำเดือน{month}'],
+  'receipt.items': ['Bill items', 'รายการในบิล'],
+  'receipt.bill_total': ['Bill total', 'ยอดรวมบิล'],
+  'receipt.paid_before': ['Paid before', 'ชำระก่อนหน้านี้'],
+  'receipt.this_payment': ['Amount received', 'จำนวนเงินที่ได้รับ'],
+  'receipt.balance_after': ['Balance remaining', 'ยอดค้างคงเหลือ'],
+  'receipt.method': ['Paid by', 'ชำระโดย'],
+  'receipt.received_by': ['Received by', 'ผู้รับเงิน'],
+  'receipt.print': ['Print', 'พิมพ์'],
+  'receipt.not_found': ['Receipt not found.', 'ไม่พบใบเสร็จนี้'],
+
+  // ---- dashboard
+  'dash.title': ['Dashboard', 'ภาพรวม'],
+  'dash.subtitle': ['Rooms and money at a glance.', 'สรุปห้องพักและการเงิน'],
+  'dash.month': ['Bills of', 'บิลของเดือน'],
+  'dash.occupancy': ['Occupancy', 'อัตราการเข้าพัก'],
+  'dash.occupancy_foot': ['{o} of {t} rooms occupied', 'มีผู้เช่า {o} จาก {t} ห้อง'],
+  'dash.expected': ['Expected', 'ยอดที่ต้องเก็บ'],
+  'dash.expected_foot': ['{n} bills · {month}', '{n} บิล · {month}'],
+  'dash.collected': ['Collected', 'เก็บได้แล้ว'],
+  'dash.collected_foot': ['{p}% of expected', '{p}% ของยอดที่ต้องเก็บ'],
+  'dash.outstanding': ['Outstanding', 'ค้างชำระทั้งหมด'],
+  'dash.outstanding_foot': ['Unpaid balance, all months', 'ยอดค้างของทุกเดือน'],
+  'dash.rooms_by_status': ['Rooms by status', 'ห้องตามสถานะ'],
+  'dash.overdue_title': ['Rooms with overdue bills', 'ห้องที่ค้างชำระเกินกำหนด'],
+  'dash.overdue_none': ['No overdue bills.', 'ไม่มีบิลค้างเกินกำหนด'],
+  'dash.overdue_row': ['{n} bills · late since {date}', '{n} บิล · เกินกำหนดตั้งแต่ {date}'],
+  'dash.overdue_total': ['Total overdue: {amount}', 'รวมค้างเกินกำหนด: {amount}'],
+  'dash.open_payments': ['Open payments', 'ไปหน้ารับชำระ'],
+
+  // ---- guide
+  'guide.title': ['How to use', 'วิธีใช้งาน'],
+  'guide.subtitle': ['Step-by-step help for daily work.', 'ขั้นตอนการใช้งานประจำวัน ทีละขั้น'],
+  'guide.contents': ['Topics', 'หัวข้อ'],
+  'guide.tip': ['Tip', 'เคล็ดลับ'],
+  'guide.switch': ['อ่านเป็นภาษาไทย', 'Read in English'],
+
   // ---- settings
   'settings.title': ['Settings', 'ตั้งค่า'],
   'settings.subtitle': ['Rates and staff access. Only the owner can see this page.', 'อัตราค่าน้ำไฟและสิทธิ์พนักงาน เฉพาะเจ้าของหอเท่านั้น'],
@@ -249,6 +331,71 @@ const D = {
   'err.duplicate': ['This already exists.', 'มีข้อมูลนี้อยู่แล้ว'],
   'err.check': ['Some values are not allowed. Check the numbers and dates.', 'มีค่าที่ไม่ถูกต้อง ตรวจสอบตัวเลขและวันที่อีกครั้ง'],
   'err.load': ['Could not load data.', 'โหลดข้อมูลไม่สำเร็จ'],
+
+  // ---- nickname / LINE (0009)
+  'common.ok': ['OK', 'ตกลง'],
+  'common.copy': ['Copy', 'คัดลอก'],
+  'common.copied': ['Copied', 'คัดลอกแล้ว'],
+  'f.nickname': ['Nickname', 'ชื่อเล่น'],
+  'f.nickname_hint': ['Shown as "101 (nickname)"', 'แสดงเป็น "101 (ชื่อเล่น)"'],
+  'line.requests_title': ['LINE requests', 'คำขอเชื่อม LINE'],
+  'line.requests_hint': [
+    'Tenants who added the LINE OA and typed their room number. Approve only if the LINE name matches the tenant.',
+    'ผู้เช่าที่เพิ่มเพื่อน LINE OA แล้วพิมพ์เลขห้อง อนุมัติเมื่อชื่อ LINE ตรงกับผู้เช่าเท่านั้น',
+  ],
+  'line.requests_empty': ['No requests waiting.', 'ไม่มีคำขอที่รออยู่'],
+  'line.typed_room': ['Typed room {n}', 'พิมพ์ห้อง {n}'],
+  'line.room_tenant': ['Tenant now: {label}', 'ผู้เช่าปัจจุบัน: {label}'],
+  'line.no_tenant_in_room': ['Room {n} has no tenant now, so it cannot be approved.', 'ห้อง {n} ไม่มีผู้เช่าอยู่ จึงอนุมัติไม่ได้'],
+  'line.linked_elsewhere': ['This LINE account is linked to {label} now. Approving moves it to this room.', 'บัญชี LINE นี้เชื่อมกับ {label} อยู่ หากอนุมัติจะย้ายมาห้องนี้'],
+  'line.tenant_has_other': ['This tenant is already linked to LINE "{name}". Approving replaces it.', 'ผู้เช่านี้เชื่อมกับ LINE "{name}" อยู่แล้ว หากอนุมัติจะแทนที่'],
+  'line.approve': ['Approve', 'อนุมัติ'],
+  'line.reject': ['Reject', 'ปฏิเสธ'],
+  'line.reject_title': ['Reject the request for room {n}?', 'ปฏิเสธคำขอของห้อง {n}?'],
+  'line.reject_body': ['The person gets a polite message asking them to contact the office.', 'ระบบจะส่งข้อความสุภาพให้ติดต่อสำนักงาน'],
+  'line.rejected': ['Request rejected', 'ปฏิเสธคำขอแล้ว'],
+  'line.approved_title': ['Room {n} is linked to LINE', 'เชื่อมห้อง {n} กับ LINE แล้ว'],
+  'line.oa_name': ['Name to set in LINE OA', 'ชื่อที่ต้องตั้งใน LINE OA'],
+  'line.line_name': ['LINE name of the tenant', 'ชื่อ LINE ของผู้เช่า'],
+  'line.oa_steps': [
+    'In LINE OA Manager → Chats, find the chat with this LINE name and change its display name to the one above.',
+    'ใน LINE OA Manager → แชท ให้หาแชทที่มีชื่อ LINE นี้ แล้วเปลี่ยนชื่อที่แสดงเป็นชื่อด้านบน',
+  ],
+  'line.pushed': ['The tenant got the confirmation message on LINE.', 'ผู้เช่าได้รับข้อความยืนยันทาง LINE แล้ว'],
+  'line.push_failed': ['Saved, but the LINE message could not be sent: {e}', 'บันทึกแล้ว แต่ส่งข้อความ LINE ไม่สำเร็จ: {e}'],
+  'line.moved_from': ['The link was moved from room {room}.', 'ย้ายการเชื่อมต่อมาจากห้อง {room}'],
+  'line.status_linked': ['LINE: linked to "{name}"', 'LINE: เชื่อมกับ "{name}" แล้ว'],
+  'line.status_not_linked': ['LINE: not linked. The tenant adds the LINE OA and types {n}.', 'LINE: ยังไม่เชื่อม ให้ผู้เช่าเพิ่มเพื่อน LINE OA แล้วพิมพ์ {n}'],
+  'line.unlink': ['Unlink LINE', 'ยกเลิกการเชื่อม LINE'],
+  'line.unlink_title': ['Unlink LINE from {label}?', 'ยกเลิกการเชื่อม LINE ของ {label}?'],
+  'line.unlink_body': ['Bills will no longer be sent to this LINE account. Also rename or clear the chat in LINE OA Manager.', 'ระบบจะไม่ส่งบิลไปยัง LINE นี้อีก และควรเปลี่ยนชื่อหรือลบแชทใน LINE OA Manager ด้วย'],
+  'line.unlinked': ['LINE unlinked', 'ยกเลิกการเชื่อม LINE แล้ว'],
+  'line.moveout_title': ['Clear the LINE chat', 'จัดการแชท LINE'],
+  'line.moveout_body': [
+    '{label} was linked to LINE as "{name}". The link has been removed. In LINE OA Manager, rename or clear this chat so it is not mixed up with the next tenant.',
+    '{label} เคยเชื่อม LINE ชื่อ "{name}" ระบบยกเลิกการเชื่อมแล้ว กรุณาเปลี่ยนชื่อหรือลบแชทนี้ใน LINE OA Manager เพื่อไม่ให้สับสนกับผู้เช่าคนถัดไป',
+  ],
+  'err.request_not_pending': ['This request was already handled. The list has been refreshed.', 'คำขอนี้ถูกจัดการไปแล้ว รายการถูกโหลดใหม่แล้ว'],
+  'err.room_has_no_tenant': ['That room has no tenant now, so it cannot be linked.', 'ห้องนี้ไม่มีผู้เช่าอยู่ จึงเชื่อมไม่ได้'],
+  'err.line_taken': ['This LINE account is already linked to another tenant.', 'บัญชี LINE นี้เชื่อมกับผู้เช่าคนอื่นอยู่แล้ว'],
+
+  // ---- payment settings (0009)
+  'settings.pay_title': ['Payment details for tenants', 'ข้อมูลการชำระเงินสำหรับผู้เช่า'],
+  'settings.pay_hint': [
+    'Sent to tenants on LINE when they choose how to pay. Staff can see them; only the owner can change them.',
+    'ใช้ส่งให้ผู้เช่าทาง LINE เมื่อเลือกวิธีชำระเงิน พนักงานดูได้ แต่แก้ไขได้เฉพาะเจ้าของหอ',
+  ],
+  'settings.promptpay_id': ['PromptPay number', 'หมายเลขพร้อมเพย์'],
+  'settings.promptpay_hint': ['10-digit phone (08…) or 13-digit ID, digits only', 'เบอร์โทร 10 หลัก (08…) หรือเลขบัตร 13 หลัก ตัวเลขเท่านั้น'],
+  'settings.bank_name': ['Bank', 'ธนาคาร'],
+  'settings.bank_branch': ['Branch', 'สาขา'],
+  'settings.bank_account_name': ['Account name', 'ชื่อบัญชี'],
+  'settings.bank_account_number': ['Account number', 'เลขที่บัญชี'],
+  'settings.office_location': ['Office location (for cash)', 'ที่ตั้งสำนักงาน (ชำระเงินสด)'],
+  'settings.office_hours': ['Office hours', 'เวลาทำการ'],
+  'settings.auto_send': ['Send bills on LINE automatically on the 1st of each month', 'ส่งบิลทาง LINE อัตโนมัติทุกวันที่ 1'],
+  'settings.auto_send_hint': ['Off until you turn it on. Not active yet: it starts working in the next step.', 'ปิดไว้จนกว่าจะเปิดเอง ยังไม่ทำงานในตอนนี้ จะเริ่มใช้ได้ในขั้นถัดไป'],
+  'settings.pay_save': ['Save payment details', 'บันทึกข้อมูลการชำระเงิน'],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type TKey = keyof typeof D;
@@ -316,6 +463,10 @@ export function friendlyError(e: unknown, t: TFn): string {
   if (m.includes('ROOM_HAS_ACTIVE_CONTRACT') || m.includes('contracts_one_active_per_room')) return t('err.room_busy');
   if (m.includes('CONTRACT_NOT_ACTIVE')) return t('err.contract_not_active');
   if (m.includes('PAYMENT_EXCEEDS_BALANCE')) return t('err.overpay');
+  if (m.includes('PRICE_ADMIN_ONLY')) return t('price.admin_only');
+  if (m.includes('REQUEST_NOT_PENDING')) return t('err.request_not_pending');
+  if (m.includes('ROOM_HAS_NO_TENANT')) return t('err.room_has_no_tenant');
+  if (m.includes('tenants_line_user_id_key')) return t('err.line_taken');
   if (code === '23503' && /payments/.test(m + (err?.details ?? ''))) return t('err.has_payments');
   if (code === '42501' || /permission denied|row-level security|NOT_ALLOWED/i.test(m)) return t('err.permission');
   if (code === '23505') return t('err.duplicate');

@@ -23,6 +23,7 @@ export default function Settings() {
         {data && (
           <>
             <RatesForm key={data.settings.updated_at} s={data.settings} onSaved={reload} />
+            <PaymentForm key={'pay' + data.settings.updated_at} s={data.settings} onSaved={reload} />
             <StaffList profiles={data.profiles} onSaved={reload} />
           </>
         )}
@@ -69,6 +70,67 @@ function RatesForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
         </FormGrid>
         <Desc>{t('settings.rates_note')}</Desc>
         <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.save')}</Btn>
+      </form>
+    </Panel>
+  );
+}
+
+/** PromptPay / bank / office details that tenants receive on LINE. Values are typed in here by
+ *  the owner only; nothing is pre-filled from code. */
+function PaymentForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const [busy, setBusy] = useState(false);
+
+  const save = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    const f = new FormData(ev.currentTarget);
+    const v = (k: string) => String(f.get(k) ?? '').trim();
+    const digits = (k: string) => v(k).replace(/[\s-]/g, '');
+    const promptpay = digits('promptpay_id');
+    const account = v('bank_account_number').replace(/\s/g, '');
+    if ((promptpay && !/^(0\d{9}|\d{13})$/.test(promptpay)) || !/^[0-9-]*$/.test(account)) {
+      toast(t('err.check'), 'error'); return;
+    }
+    setBusy(true);
+    try {
+      await updateSettings({
+        promptpay_id: promptpay, bank_name: v('bank_name'), bank_branch: v('bank_branch'),
+        bank_account_name: v('bank_account_name'), bank_account_number: account,
+        office_location: v('office_location'), office_hours: v('office_hours'),
+        auto_send_enabled: f.get('auto_send_enabled') === 'on',
+      });
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Panel>
+      <PanelTitle>{t('settings.pay_title')}</PanelTitle>
+      <Desc>{t('settings.pay_hint')}</Desc>
+      <form onSubmit={save}>
+        <FormGrid>
+          <Field label={t('settings.promptpay_id')} hint={t('settings.promptpay_hint')}>
+            <input name="promptpay_id" inputMode="numeric" autoComplete="off" defaultValue={s.promptpay_id} />
+          </Field>
+          <Field label={t('settings.bank_name')}><input name="bank_name" autoComplete="off" defaultValue={s.bank_name} /></Field>
+          <Field label={t('settings.bank_branch')}><input name="bank_branch" autoComplete="off" defaultValue={s.bank_branch} /></Field>
+          <Field label={t('settings.bank_account_name')}><input name="bank_account_name" autoComplete="off" defaultValue={s.bank_account_name} /></Field>
+          <Field label={t('settings.bank_account_number')}>
+            <input name="bank_account_number" inputMode="numeric" autoComplete="off" defaultValue={s.bank_account_number} />
+          </Field>
+          <Field label={t('settings.office_hours')}><input name="office_hours" autoComplete="off" defaultValue={s.office_hours} /></Field>
+          <Field label={t('settings.office_location')} className="col-span-full">
+            <textarea name="office_location" rows={2} defaultValue={s.office_location} />
+          </Field>
+        </FormGrid>
+        <label className="flex items-start gap-2.5 mb-1 text-[14.5px]">
+          <input type="checkbox" name="auto_send_enabled" defaultChecked={s.auto_send_enabled} className="mt-1 w-5 h-5" />
+          <span>{t('settings.auto_send')}</span>
+        </label>
+        <Desc className="ml-[30px] mt-0 mb-4">{t('settings.auto_send_hint')}</Desc>
+        <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.pay_save')}</Btn>
       </form>
     </Panel>
   );

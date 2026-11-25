@@ -12,6 +12,7 @@ import {
   computeBill, dueDate, lineSatang, paymentStatus, pickCurrent, pickPrevious, previewMonth,
   type ContractLite, type Reading,
 } from '../src/lib/billing.ts';
+import { dashboardNumbers, defaultDashMonth, type DashBill } from '../src/lib/dashboard.ts';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -154,6 +155,29 @@ test('rounding matches Postgres round(x, 2): half away from zero, no float drift
 test('due date is settings.due_day of the following month (also across the year end)', () => {
   assert.equal(dueDate('2026-11-01', 5), '2026-12-05');
   assert.equal(dueDate('2026-12-01', 5), '2027-01-05');
+});
+
+test('dashboard: 3 example bills (one partly paid) give the right expected / collected / outstanding', () => {
+  // The 3 example rooms above: 101 paid in full, 102 unpaid and overdue, 103 partly paid (3000 of 6049.20).
+  const bill = (room: string, total: number, paid: number, overdue: boolean): DashBill => ({
+    room_id: room, room_number: room, tenant_name: `T${room}`, month: NOV, total, paid,
+    balance: Math.round((total - paid) * 100) / 100, is_overdue: overdue, due_date: '2026-12-05',
+  });
+  const bills = [bill('101', 7197.2, 7197.2, false), bill('102', 6855.6, 0, true), bill('103', 6049.2, 3000, true),
+    { ...bill('103', 1000, 0, true), month: '2026-10-01', due_date: '2026-11-05' }];
+  const rooms = [{ id: '101', number: '101', status: 'occupied' }, { id: '102', number: '102', status: 'occupied' },
+    { id: '103', number: '103', status: 'occupied' }, { id: '104', number: '104', status: 'vacant' }];
+  const n = dashboardNumbers(rooms, bills, NOV);
+  assert.equal(n.occupancy, 0.75);
+  assert.equal(n.billsInMonth, 3);
+  assert.equal(n.expected, 20102);                 // 7197.20 + 6855.60 + 6049.20
+  assert.equal(n.collected, 10197.2);              // 7197.20 + 3000
+  assert.equal(n.outstanding, 10904.8);            // 6855.60 + 3049.20 + 1000 (October)
+  assert.deepEqual(n.overdue.map((r) => [r.roomNumber, r.bills, r.amount, r.oldestDue]),
+    [['103', 2, 4049.2, '2026-11-05'], ['102', 1, 6855.6, '2026-12-05']]);
+  assert.equal(n.overdueTotal, 10904.8);
+  assert.equal(defaultDashMonth(bills, '2026-12-01'), NOV);   // no December bills yet -> November
+  assert.equal(defaultDashMonth([], '2026-12-01'), '2026-12-01');
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all good'}`);

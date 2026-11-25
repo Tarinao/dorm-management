@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { setRoomPrices } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useFeedback } from '../lib/feedback';
 import { parseNum } from '../lib/format';
 import { friendlyError, useI18n } from '../lib/i18n';
@@ -10,8 +11,26 @@ export interface PricedRoom { id: string; number: string; default_rent: number; 
 export interface WaterPrices { water_price_old: number; water_price_new: number }
 
 /** Water price choice (old / new customer), people and rent for one room.
- *  Saved to the room, so the next month's bill starts from the same values. */
-export function RoomPricesEditor({ room, prices, onSaved, compact = false }: {
+ *  Saved to the room, so the next month's bill starts from the same values.
+ *  Only the owner (admin) can change them; staff see the values read-only (the database enforces this too). */
+export function RoomPricesEditor(props: {
+  room: PricedRoom; prices: WaterPrices; onSaved: () => void; compact?: boolean;
+}) {
+  const { isAdmin } = useAuth();
+  const { t, money } = useI18n();
+  if (!isAdmin) {
+    const { room } = props;
+    return (
+      <div className="text-[13px] text-ink-soft tabular-nums">
+        {t('price.summary', { rent: money(room.default_rent), w: money(room.water_per_person), n: room.occupants })}
+        <span className="text-muted text-[12px] ml-2">({t('price.admin_only')})</span>
+      </div>
+    );
+  }
+  return <PricesForm {...props} />;
+}
+
+function PricesForm({ room, prices, onSaved, compact = false }: {
   room: PricedRoom; prices: WaterPrices; onSaved: () => void; compact?: boolean;
 }) {
   const { t, money } = useI18n();

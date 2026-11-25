@@ -118,7 +118,7 @@ function MeterCard({ card, month, readOn, onSaved }: { card: CardData; month: st
         <div className="flex items-center gap-2 min-w-0">
           <RoomStatusIcon status={card.status} size={24} />
           <span className={`font-display text-xl font-semibold ${vacant ? 'text-muted' : ''}`}>{card.number}</span>
-          <span className="text-[13px] text-ink-soft truncate">{card.tenant ?? ''}</span>
+          {card.tenant && <span className="text-[14px] text-ink-soft truncate">({card.tenant})</span>}
         </div>
         {card.saved
           ? <span className="flex items-center gap-1 text-[12px] font-semibold text-sage shrink-0"><IconCheck size={15} />{date(card.saved.read_on)}</span>

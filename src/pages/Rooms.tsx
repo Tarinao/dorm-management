@@ -6,6 +6,8 @@ import { useLoad } from '../lib/useLoad';
 import { LoadState, StatusPill } from '../components/common';
 import { RoomStatusIcon } from '../components/icons';
 import { Empty, PageHead } from '../components/ui';
+import { LineRequests } from '../components/LineRequests';
+import { tenantShort } from '../lib/format';
 
 const STATUSES = ['vacant', 'occupied', 'reserved', 'maintenance'] as const;
 
@@ -25,13 +27,15 @@ export default function Rooms() {
     if (filter !== 'all' && r.status !== filter) return false;
     const s = q.trim().toLowerCase();
     if (!s) return true;
-    return r.number.toLowerCase().includes(s) || (r.current?.tenants?.full_name ?? '').toLowerCase().includes(s);
+    const tn = r.current?.tenants;
+    return r.number.toLowerCase().includes(s) || `${tn?.full_name ?? ''} ${tn?.nickname ?? ''}`.toLowerCase().includes(s);
   });
 
   return (
     <>
       <PageHead title={t('rooms.title')} sub={t('rooms.subtitle', { n: counts.all })} />
       <LoadState loading={loading && !data} error={error} onRetry={reload}>
+        {data && <LineRequests rooms={data} onChanged={reload} />}
         <div className="flex flex-wrap gap-2 mb-4">
           {(['all', ...STATUSES] as const).map((s) => (
             <button key={s} type="button" onClick={() => setFilter(s)}
@@ -54,7 +58,9 @@ export default function Rooms() {
                     <RoomStatusIcon status={r.status} size={30} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <span className={`font-display text-xl font-semibold ${vacant ? 'text-muted' : ''}`}>{r.number}</span>
+                        <span className={`font-display text-xl font-semibold ${vacant ? 'text-muted' : ''}`}>
+                          {r.number}{r.current?.tenants && <span className="font-sans text-[15px] font-normal"> ({tenantShort(r.current.tenants)})</span>}
+                        </span>
                         <StatusPill status={r.status} />
                       </div>
                       <div className="text-[13.5px] mt-0.5 truncate">
