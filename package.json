@@ -11,7 +11,8 @@
     "test:billing": "node scripts/test-billing.ts",
     "test:guide": "node scripts/test-guide.ts",
     "import:old": "node --env-file-if-exists=.env scripts/import-old-data.ts",
-    "test:line": "node scripts/test-line.ts"
+    "test:line": "node scripts/test-line.ts",
+    "test:promptpay": "node scripts/test-promptpay.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",

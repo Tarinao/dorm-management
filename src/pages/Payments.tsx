@@ -5,6 +5,7 @@ import { useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, StatusPill } from '../components/common';
 import { PaymentDialog, PaymentHistory } from '../components/Payments';
+import { SlipsPanel } from '../components/Slips';
 import { Btn, Empty, PageHead } from '../components/ui';
 
 const FILTERS: BillFilter[] = ['overdue', 'open', 'paid', 'all'];
@@ -38,6 +39,7 @@ export default function Payments() {
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('pay.search')} className="flex-1 min-w-[180px]" />
       </div>
+      <SlipsPanel onChanged={reload} />
       <LoadState loading={loading && !data} error={error} onRetry={reload}>
         {shown.length === 0 ? <Empty>{t('pay.empty')}</Empty> : (
           <>

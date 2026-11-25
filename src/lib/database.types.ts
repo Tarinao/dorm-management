@@ -1,7 +1,8 @@
 /* Generated from the live Supabase schema (Supabase MCP generate_typescript_types, 2026-11-23),
  * then updated for migration 20261123140852_water_per_person.sql (marked "0006"; checked against regenerated types after it was applied)
  * and 20261123151116_no_water_meter.sql (marked "0007": the water reading is optional)
- * and 20261124144201_line_linking.sql (marked "0009", hand-written; applied 2026-11-24).
+ * and 20261124144201_line_linking.sql (marked "0009", hand-written; applied 2026-11-24)
+ * and 20261125093453_line_billing.sql (marked "0010", hand-written).
  * Hand edits marked "edited": move_in's p_tenant_id and p_end_date accept null
  * (the SQL function handles null; the generator cannot tell).
  * Regenerate after any schema change. */
@@ -12,6 +13,14 @@ type PaySettings = {
   office_location: string; office_hours: string; auto_send_enabled: boolean;
 };
 type TenantLine = { nickname: string; line_user_id: string | null; line_display_name: string; line_linked_at: string | null };
+/* 0010 */
+type BillLine = { line_sent_at: string | null; line_reminded_at: string | null; pay_method_chosen: string | null; pay_method_chosen_at: string | null };
+type SlipRow = {
+  id: string; line_message_id: string; line_user_id: string; tenant_id: string | null; bill_id: string | null;
+  storage_path: string; qr_text: string | null; qr_ref: string | null; slip_ref: string | null; duplicate_of: string | null;
+  status: string; payment_id: string | null; received_at: string; checked_by: string | null; checked_at: string | null;
+};
+type RunRow = { id: string; kind: string; month: string | null; ran_at: string; ran_by: string | null; summary: Json };
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -35,21 +44,21 @@ export type Database = {
           id: string; month: string; note: string; rent: number; room_id: string;
           water_amount: number | null; water_curr: number; water_prev: number; water_units: number | null;
           water_people: number; water_per_person: number; // 0006
-        };
+        } & BillLine; // 0010
         Insert: {
           contract_id?: string | null; created_at?: string; created_by?: string | null; due_date: string;
           elec_amount?: number | null; elec_curr?: number; elec_prev?: number; elec_rate?: number; elec_units?: number | null;
           id?: string; month: string; note?: string; rent?: number; room_id: string;
           water_amount?: number | null; water_curr?: number; water_prev?: number; water_units?: number | null;
           water_people?: number; water_per_person?: number; // 0006
-        };
+        } & Partial<BillLine>;
         Update: {
           contract_id?: string | null; created_at?: string; created_by?: string | null; due_date?: string;
           elec_amount?: number | null; elec_curr?: number; elec_prev?: number; elec_rate?: number; elec_units?: number | null;
           id?: string; month?: string; note?: string; rent?: number; room_id?: string;
           water_amount?: number | null; water_curr?: number; water_prev?: number; water_units?: number | null;
           water_people?: number; water_per_person?: number; // 0006
-        };
+        } & Partial<BillLine>;
         Relationships: [
           { foreignKeyName: 'bills_contract_id_fkey'; columns: ['contract_id']; isOneToOne: false; referencedRelation: 'contracts'; referencedColumns: ['id'] },
           { foreignKeyName: 'bills_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
@@ -106,9 +115,9 @@ export type Database = {
         Relationships: [];
       };
       settings: {
-        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number } & PaySettings; // 0006, 0009
-        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number } & Partial<PaySettings>;
-        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number } & Partial<PaySettings>;
+        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number; summary_line_user_id: string | null } & PaySettings; // 0006, 0009, 0010
+        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings>;
+        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings>;
         Relationships: [];
       };
       line_link_requests: { // 0009
@@ -131,6 +140,22 @@ export type Database = {
           { foreignKeyName: 'line_link_requests_tenant_id_fkey'; columns: ['tenant_id']; isOneToOne: false; referencedRelation: 'tenants'; referencedColumns: ['id'] },
         ];
       };
+      payment_slips: { // 0010
+        Row: SlipRow;
+        Insert: Partial<SlipRow> & { line_message_id: string; line_user_id: string; storage_path: string };
+        Update: Partial<SlipRow>;
+        Relationships: [
+          { foreignKeyName: 'payment_slips_bill_id_fkey'; columns: ['bill_id']; isOneToOne: false; referencedRelation: 'bills'; referencedColumns: ['id'] },
+          { foreignKeyName: 'payment_slips_bill_id_fkey'; columns: ['bill_id']; isOneToOne: false; referencedRelation: 'bill_summary'; referencedColumns: ['id'] },
+          { foreignKeyName: 'payment_slips_tenant_id_fkey'; columns: ['tenant_id']; isOneToOne: false; referencedRelation: 'tenants'; referencedColumns: ['id'] },
+        ];
+      };
+      line_send_runs: { // 0010
+        Row: RunRow;
+        Insert: Partial<RunRow> & { kind: string };
+        Update: Partial<RunRow>;
+        Relationships: [];
+      };
       tenants: {
         Row: { created_at: string; emergency_name: string; emergency_phone: string; full_name: string; id: string; id_card_ref: string; notes: string; phone: string } & TenantLine; // 0009
         Insert: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name: string; id?: string; id_card_ref?: string; notes?: string; phone?: string } & Partial<TenantLine>;
@@ -148,6 +173,7 @@ export type Database = {
           status: string | null; total: number | null;
           water_amount: number | null; water_curr: number | null; water_prev: number | null; water_units: number | null;
           water_people: number | null; water_per_person: number | null; // 0006
+          line_sent_at: string | null; line_reminded_at: string | null; pay_method_chosen: string | null; // 0010
         };
         Relationships: [
           { foreignKeyName: 'bills_contract_id_fkey'; columns: ['contract_id']; isOneToOne: false; referencedRelation: 'contracts'; referencedColumns: ['id'] },
@@ -162,6 +188,7 @@ export type Database = {
         Returns: { line_user_id: string; room_number: string; tenant_full_name: string; tenant_nickname: string; line_display_name: string; previous_room: string | null }[];
       };
       reject_line_request: { Args: { p_request_id: string }; Returns: { line_user_id: string; room_number_typed: string }[] }; // 0009
+      confirm_slip: { Args: { p_slip_id: string; p_amount: number; p_paid_on: string; p_note?: string }; Returns: string }; // 0010
       generate_bills: { Args: { p_month: string }; Returns: { new_bill_id: string; outcome: string; room_number: string }[] };
       is_admin: { Args: never; Returns: boolean };
       is_member: { Args: never; Returns: boolean };

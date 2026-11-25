@@ -78,3 +78,8 @@ export function parseNum(v: FormDataEntryValue | string | null | undefined): num
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
+
+/** The Bangkok calendar day of a timestamp (e.g. 2026-11-30T20:00Z -> 2026-12-01). */
+export function bangkokDay(ts: string): string {
+  return new Date(new Date(ts).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}

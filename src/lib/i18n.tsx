@@ -391,11 +391,81 @@ const D = {
   'settings.bank_branch': ['Branch', 'สาขา'],
   'settings.bank_account_name': ['Account name', 'ชื่อบัญชี'],
   'settings.bank_account_number': ['Account number', 'เลขที่บัญชี'],
-  'settings.office_location': ['Office location (for cash)', 'ที่ตั้งสำนักงาน (ชำระเงินสด)'],
+  'settings.office_location': ['Office location (optional)', 'ที่ตั้งสำนักงาน (ไม่บังคับ)'],
   'settings.office_hours': ['Office hours', 'เวลาทำการ'],
   'settings.auto_send': ['Send bills on LINE automatically on the 1st of each month', 'ส่งบิลทาง LINE อัตโนมัติทุกวันที่ 1'],
-  'settings.auto_send_hint': ['Off until you turn it on. Not active yet: it starts working in the next step.', 'ปิดไว้จนกว่าจะเปิดเอง ยังไม่ทำงานในตอนนี้ จะเริ่มใช้ได้ในขั้นถัดไป'],
+  'settings.auto_send_hint': [
+    'Off until you turn it on. When on: on the 1st at 08:00, last month\'s bills are made and sent to tenants on LINE; at 09:00 each day unpaid bills get a reminder (at most every 3 days).',
+    'ปิดไว้จนกว่าจะเปิดเอง เมื่อเปิด: วันที่ 1 เวลา 08:00 ระบบจะสร้างบิลของเดือนก่อนและส่งให้ผู้เช่าทาง LINE และทุกวันเวลา 09:00 จะแจ้งเตือนบิลที่ยังไม่ชำระ (ไม่เกิน 1 ครั้งทุก 3 วัน)',
+  ],
   'settings.pay_save': ['Save payment details', 'บันทึกข้อมูลการชำระเงิน'],
+
+  // ---- bills on LINE (0010)
+  'billing.line_send': ['Generate & send via LINE', 'สร้างบิลและส่งทาง LINE'],
+  'billing.line_sending': ['Sending…', 'กำลังส่ง…'],
+  'billing.line_confirm_title': ['Send the bills of {month} on LINE?', 'ส่งบิลเดือน {month} ทาง LINE?'],
+  'billing.line_confirm_body': [
+    'Bills that are ready are created first. Every tenant linked to LINE then gets their bill with payment buttons. A bill already sent is never sent again.',
+    'ระบบจะสร้างบิลที่พร้อมก่อน แล้วส่งบิลพร้อมปุ่มเลือกวิธีชำระให้ผู้เช่าที่เชื่อม LINE แล้ว บิลที่ส่งไปแล้วจะไม่ส่งซ้ำ',
+  ],
+  'billing.line_send_yes': ['Send', 'ส่ง'],
+  'billing.copy_msg': ['Copy message', 'คัดลอกข้อความ'],
+  'billing.copied_msg': ['Message copied. Paste it in the tenant\'s chat.', 'คัดลอกแล้ว นำไปวางในแชทของผู้เช่าได้เลย'],
+  'billing.line_sent_at': ['Sent on LINE {date}', 'ส่งทาง LINE แล้ว {date}'],
+  'billing.line_not_sent': ['Not sent on LINE', 'ยังไม่ได้ส่งทาง LINE'],
+  'billing.pay_choice': ['Tenant chose: {m}', 'ผู้เช่าเลือก: {m}'],
+  'paymethod.promptpay': ['PromptPay QR', 'สแกน QR พร้อมเพย์'],
+  'paymethod.transfer': ['Bank transfer', 'โอนเข้าบัญชี'],
+  'paymethod.cash': ['Cash', 'จ่ายเป็นเงินสด'],
+  'run.title': ['Sent on LINE: {month}', 'ส่งทาง LINE: {month}'],
+  'run.last': ['Last LINE run: {date}', 'ส่งทาง LINE ล่าสุด: {date}'],
+  'run.created': ['New bills', 'บิลใหม่'],
+  'run.sent': ['Sent on LINE now', 'ส่งทาง LINE ครั้งนี้'],
+  'run.already_sent': ['Sent before (not sent again)', 'ส่งไปแล้วก่อนหน้า (ไม่ส่งซ้ำ)'],
+  'run.not_linked': ['Not on LINE: send by hand with "Copy message"', 'ยังไม่เชื่อม LINE: ส่งเองด้วย "คัดลอกข้อความ"'],
+  'run.paid': ['Already paid', 'ชำระแล้ว'],
+  'run.no_reading': ['No bill: meter not read', 'ไม่มีบิล: ยังไม่จดมิเตอร์'],
+  'run.meter_backwards': ['No bill: meter lower than last month', 'ไม่มีบิล: เลขมิเตอร์น้อยกว่าเดือนก่อน'],
+  'run.no_previous_reading': ['No bill: no earlier reading', 'ไม่มีบิล: ไม่มีเลขมิเตอร์เดือนก่อน'],
+  'run.failed': ['Could not send', 'ส่งไม่สำเร็จ'],
+  'run.none': ['none', 'ไม่มี'],
+  'err.line_not_configured': ['LINE is not set up on the server (access token missing).', 'ยังไม่ได้ตั้งค่า LINE บนเซิร์ฟเวอร์ (ไม่มี access token)'],
+
+  // ---- payment slips (0010)
+  'slip.title': ['Slips to check', 'สลิปรอตรวจสอบ'],
+  'slip.hint': [
+    'Sent by tenants in the LINE chat. Check each one in your bank app first. A slip never marks a bill paid by itself.',
+    'ผู้เช่าส่งมาทางแชท LINE กรุณาตรวจสอบยอดเงินในแอปธนาคารก่อน สลิปจะไม่ทำให้บิลเป็น "ชำระแล้ว" เอง',
+  ],
+  'slip.received': ['Slip received – check & confirm', 'ได้รับสลิป – ตรวจสอบและยืนยัน'],
+  'slip.duplicate': ['สลิปซ้ำ / Duplicate slip', 'สลิปซ้ำ / Duplicate slip'],
+  'slip.duplicate_of': ['Same QR as a slip received {date} ({status}).', 'QR เดียวกับสลิปที่ได้รับเมื่อ {date} ({status})'],
+  'slip.status.pending': ['waiting', 'รอตรวจสอบ'],
+  'slip.status.confirmed': ['confirmed', 'ยืนยันแล้ว'],
+  'slip.status.rejected': ['not valid', 'ไม่ถูกต้อง'],
+  'slip.no_qr': ['No QR found on this picture: check it by eye.', 'ไม่พบ QR ในรูปนี้ กรุณาตรวจสอบด้วยตา'],
+  'slip.ref': ['Slip ref. {ref}', 'เลขอ้างอิงสลิป {ref}'],
+  'slip.for_bill': ['For {month} · balance {b}', 'สำหรับเดือน {month} · คงค้าง {b}'],
+  'slip.no_bill': ['This tenant has no unpaid bill.', 'ผู้เช่านี้ไม่มีบิลค้างชำระ'],
+  'slip.received_at': ['Received {date} {time}', 'ได้รับเมื่อ {date} {time}'],
+  'slip.confirm': ['Confirm & record payment', 'ยืนยันและบันทึกการชำระ'],
+  'slip.confirm_title': ['Record the payment from this slip: room {n}', 'บันทึกการชำระจากสลิป: ห้อง {n}'],
+  'slip.confirm_hint': ['Type the amount shown on the slip.', 'ใส่ยอดเงินตามสลิป'],
+  'slip.reject': ['Not valid', 'ไม่ถูกต้อง'],
+  'slip.reject_title': ['Mark this slip as not valid?', 'ยืนยันว่าสลิปนี้ไม่ถูกต้อง?'],
+  'slip.reject_body': ['No payment is recorded. Contact the tenant if needed.', 'ระบบจะไม่บันทึกการชำระ ติดต่อผู้เช่าหากจำเป็น'],
+  'slip.rejected': ['Slip marked not valid', 'บันทึกว่าสลิปไม่ถูกต้องแล้ว'],
+  'slip.open': ['Open full size', 'เปิดรูปขนาดเต็ม'],
+  'err.slip_not_pending': ['This slip was already handled. The list has been refreshed.', 'สลิปนี้ถูกจัดการไปแล้ว รายการถูกโหลดใหม่แล้ว'],
+  'err.slip_has_no_bill': ['This slip is not linked to an unpaid bill.', 'สลิปนี้ไม่ได้ผูกกับบิลค้างชำระ'],
+
+  // ---- settings: monthly summary on LINE (0010)
+  'settings.summary_line': ['Send the monthly summary to this LINE account', 'ส่งสรุปบิลประจำเดือนไปที่บัญชี LINE นี้'],
+  'settings.summary_line_hint': [
+    'Lists rooms that got no bill (e.g. meter not read). Choose your own account; it appears here after it has messaged the LINE OA.',
+    'แสดงห้องที่ไม่มีบิล (เช่น ยังไม่จดมิเตอร์) เลือกบัญชีของคุณเอง บัญชีจะแสดงที่นี่หลังจากเคยส่งข้อความหา LINE OA',
+  ],
+  'settings.summary_none': ['Do not send (see it in the app only)', 'ไม่ต้องส่ง (ดูในแอปเท่านั้น)'],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type TKey = keyof typeof D;
@@ -466,6 +536,9 @@ export function friendlyError(e: unknown, t: TFn): string {
   if (m.includes('PRICE_ADMIN_ONLY')) return t('price.admin_only');
   if (m.includes('REQUEST_NOT_PENDING')) return t('err.request_not_pending');
   if (m.includes('ROOM_HAS_NO_TENANT')) return t('err.room_has_no_tenant');
+  if (m.includes('SLIP_NOT_PENDING')) return t('err.slip_not_pending');
+  if (m.includes('SLIP_HAS_NO_BILL')) return t('err.slip_has_no_bill');
+  if (m.includes('LINE_NOT_CONFIGURED')) return t('err.line_not_configured');
   if (m.includes('tenants_line_user_id_key')) return t('err.line_taken');
   if (code === '23503' && /payments/.test(m + (err?.details ?? ''))) return t('err.has_payments');
   if (code === '42501' || /permission denied|row-level security|NOT_ALLOWED/i.test(m)) return t('err.permission');

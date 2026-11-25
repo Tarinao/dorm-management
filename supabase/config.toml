@@ -10,3 +10,8 @@ verify_jwt = false
 # Called by the app (Approve / Reject): only logged-in users.
 [functions.line-link]
 verify_jwt = true
+
+# Called by pg_cron (header x-cron-secret = CRON_SECRET) and by the app (a logged-in admin/staff
+# JWT). Both are checked inside the function; the gateway check is off because cron sends no JWT.
+[functions.monthly-bills]
+verify_jwt = false

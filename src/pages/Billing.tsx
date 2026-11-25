@@ -1,19 +1,20 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { billMessage } from '../../supabase/functions/_shared/core';
 import {
-  addExtra, deleteBill, deleteExtra, generateBills, getSettings, listBillsForMonth, loadMonth,
-  type BillExtra, type BillSummary, type Payment,
+  addExtra, deleteBill, deleteExtra, generateBills, getSettings, lastSendRun, listBillsForMonth, loadMonth, sendBillsOnLine,
+  type BillExtra, type BillSummary, type Payment, type RunSummary,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { previewMonth } from '../lib/billing';
 import { useFeedback } from '../lib/feedback';
-import { currentMonth, fromMonthInput, meter, monthEnd, parseNum, toMonthInput } from '../lib/format';
+import { bangkokDay, currentMonth, fromMonthInput, meter, monthEnd, parseNum, toMonthInput } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, NumInput, StatusPill } from '../components/common';
 import { PaymentDialog, PaymentHistory } from '../components/Payments';
 import { RoomPricesEditor } from '../components/RoomPrices';
-import { AlertBar, Btn, Desc, Empty, Field, PageHead, Panel, PanelTitle } from '../components/ui';
+import { AlertBar, Btn, BtnRow, Desc, Empty, Field, Modal, ModalClose, PageHead, Panel, PanelTitle } from '../components/ui';
 
 export default function Billing() {
   const { t, money, month: monthName } = useI18n();
@@ -21,10 +22,11 @@ export default function Billing() {
   const { toast, confirm } = useFeedback();
   const [month, setMonth] = useState(currentMonth);
   const [busy, setBusy] = useState(false);
+  const [run, setRun] = useState<RunSummary | null>(null);
 
   const { data, error, loading, reload } = useLoad(async () => {
-    const [settings, md, bills] = await Promise.all([getSettings(), loadMonth(month), listBillsForMonth(month)]);
-    return { settings, md, bills };
+    const [settings, md, bills, lastRun] = await Promise.all([getSettings(), loadMonth(month), listBillsForMonth(month), lastSendRun()]);
+    return { settings, md, bills, lastRun };
   }, [month]);
 
   const preview = useMemo(() => {
@@ -56,6 +58,21 @@ export default function Billing() {
     } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
   };
 
+  // Generate (like the button above) and send every bill of the month not sent yet on LINE.
+  const sendLine = async () => {
+    const ok = await confirm({
+      title: t('billing.line_confirm_title', { month: monthName(month) }),
+      body: t('billing.line_confirm_body'),
+      confirmLabel: t('billing.line_send_yes'),
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      setRun(await sendBillsOnLine(month));
+      await reload();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
   return (
     <>
       <PageHead title={t('billing.title')} sub={t('billing.subtitle')}>
@@ -75,10 +92,21 @@ export default function Billing() {
             <Panel>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <PanelTitle className="m-0">{t('billing.preview', { month: monthName(month) })}</PanelTitle>
-                <Btn disabled={busy || ready.length === 0} onClick={() => void generate()}>
-                  {busy ? t('billing.generating') : ready.length ? t('billing.generate', { n: ready.length }) : t('billing.generate_none')}
-                </Btn>
+                <div className="flex gap-2 flex-wrap">
+                  <Btn disabled={busy || ready.length === 0} onClick={() => void generate()}>
+                    {busy ? t('billing.generating') : ready.length ? t('billing.generate', { n: ready.length }) : t('billing.generate_none')}
+                  </Btn>
+                  <Btn variant="secondary" disabled={busy} onClick={() => void sendLine()}>
+                    {busy ? t('billing.line_sending') : t('billing.line_send')}
+                  </Btn>
+                </div>
               </div>
+              {data.lastRun && (
+                <button type="button" className="text-[13px] text-teal bg-transparent border-0 p-0 underline mb-3"
+                  onClick={() => setRun(data.lastRun!.summary as unknown as RunSummary)}>
+                  {t('run.last', { date: new Date(data.lastRun.ran_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) })}
+                </button>
+              )}
               <Desc className="mt-0 mb-3">{t(isAdmin ? 'billing.prices_hint' : 'billing.prices_hint_staff')}</Desc>
               {preview.length === 0 ? <Empty>{t('meters.empty')}</Empty> : (
                 <div className="flex flex-col gap-3">
@@ -124,7 +152,35 @@ export default function Billing() {
           </>
         )}
       </LoadState>
+      {run && <RunDialog run={run} onClose={() => setRun(null)} />}
     </>
+  );
+}
+
+/** What a "send via LINE" run did, room by room. */
+function RunDialog({ run, onClose }: { run: RunSummary; onClose: () => void }) {
+  const { t, month } = useI18n();
+  const rows: [TKey, string[]][] = [
+    ['run.created', run.created], ['run.sent', run.sent], ['run.already_sent', run.already_sent],
+    ['run.not_linked', run.not_linked], ['run.paid', run.paid], ['run.no_reading', run.no_reading],
+    ['run.meter_backwards', run.meter_backwards], ['run.no_previous_reading', run.no_previous_reading],
+    ['run.failed', run.failed.map((f) => `${f.room} (${f.error.slice(0, 80)})`)],
+  ];
+  const warn: TKey[] = ['run.not_linked', 'run.no_reading', 'run.meter_backwards', 'run.no_previous_reading', 'run.failed'];
+  return (
+    <Modal onClose={onClose} className="max-w-[560px]">
+      <ModalClose onClick={onClose} />
+      <h2 className="text-xl mt-0">{t('run.title', { month: month(run.month) })}</h2>
+      <dl className="m-0 text-[14px]">
+        {rows.map(([k, rooms]) => (
+          <div key={k} className="py-2 border-b border-line last:border-0">
+            <dt className={`font-semibold ${rooms.length && warn.includes(k) ? 'text-terracotta' : ''}`}>{t(k)}: {rooms.length}</dt>
+            <dd className="m-0 text-ink-soft break-words">{rooms.length ? rooms.join(', ') : t('run.none')}</dd>
+          </div>
+        ))}
+      </dl>
+      <BtnRow className="mt-4"><Btn onClick={onClose}>{t('common.ok')}</Btn></BtnRow>
+    </Modal>
   );
 }
 
@@ -134,7 +190,26 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
   const { toast, confirm } = useFeedback();
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [manualCopy, setManualCopy] = useState<string | null>(null);
   const open = Number(bill.balance ?? 0) > 0;
+
+  // The same text the LINE message has, for tenants who are not on LINE.
+  const copyMessage = async () => {
+    const msg = billMessage({
+      room: bill.room_number ?? '', tenant: { nickname: tenant }, month: bill.month ?? '', due_date: bill.due_date ?? '',
+      rent: bill.rent ?? 0, water_people: bill.water_people ?? 0, water_per_person: bill.water_per_person ?? 0,
+      water_amount: bill.water_amount ?? 0, elec_prev: bill.elec_prev ?? 0, elec_curr: bill.elec_curr ?? 0,
+      elec_units: bill.elec_units ?? 0, elec_rate: bill.elec_rate ?? 0, elec_amount: bill.elec_amount ?? 0,
+      extras: bill.extras, total: bill.total ?? 0, paid: bill.paid ?? 0, balance: bill.balance ?? 0,
+    }).replace('กรุณาเลือกวิธีชำระเงินด้านล่าง', 'ชำระได้ทางพร้อมเพย์ โอนเข้าบัญชี หรือเงินสดที่สำนักงาน')
+      .replace('Please choose how to pay below.', 'Pay by PromptPay, bank transfer or cash at the office.');
+    try {
+      await navigator.clipboard.writeText(msg);
+      toast(t('billing.copied_msg'));
+    } catch {
+      setManualCopy(msg);   // clipboard blocked: show the text to copy by hand
+    }
+  };
   const status = bill.is_overdue ? 'overdue' : bill.status;
 
   const add = async (ev: FormEvent<HTMLFormElement>) => {
@@ -207,7 +282,18 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
         </div>
       )}
       <PaymentHistory payments={bill.payments} onChanged={onChanged} />
+      <div className="text-[12.5px] text-muted mt-2">
+        {bill.line_sent_at ? t('billing.line_sent_at', { date: date(bangkokDay(bill.line_sent_at)) }) : t('billing.line_not_sent')}
+        {bill.pay_method_chosen && <> · {t('billing.pay_choice', { m: t(`paymethod.${bill.pay_method_chosen}` as TKey) })}</>}
+      </div>
       {paying && <PaymentDialog bill={bill} onClose={() => setPaying(false)} />}
+      {manualCopy && (
+        <Modal onClose={() => setManualCopy(null)} className="max-w-[520px]">
+          <ModalClose onClick={() => setManualCopy(null)} />
+          <h2 className="text-xl mt-0">{t('billing.copy_msg')}</h2>
+          <textarea readOnly value={manualCopy} rows={14} className="w-full text-[13px]" autoFocus onFocus={(e) => e.currentTarget.select()} />
+        </Modal>
+      )}
 
       {adding ? (
         <form onSubmit={add} className="grid grid-cols-[1fr_110px] gap-2 mt-3 items-end">
@@ -222,6 +308,7 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
         <div className="flex gap-2 mt-3 flex-wrap">
           {open && <Btn small onClick={() => setPaying(true)}>{t('pay.record')}</Btn>}
           <Btn small variant="secondary" onClick={() => setAdding(true)}>{t('billing.add_extra')}</Btn>
+          <Btn small variant="secondary" onClick={() => void copyMessage()}>{t('billing.copy_msg')}</Btn>
           {isAdmin && Number(bill.paid) === 0 && <Btn small variant="danger" onClick={() => void removeBill()}>{t('billing.delete_bill')}</Btn>}
         </div>
       )}

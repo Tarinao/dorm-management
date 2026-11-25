@@ -19,6 +19,30 @@ async function call(token: string, path: string, body: unknown): Promise<void> {
 
 export const text = (t: string): LineMessage => ({ type: 'text', text: t });
 
+/** Text with tap-to-answer buttons under it. Each button sends a postback (data) to the webhook
+ *  and shows `said` in the chat as if the tenant typed it. LINE: label <= 20 chars, data <= 300. */
+export function textWithButtons(t: string, buttons: { label: string; data: string; said: string }[]): LineMessage {
+  return {
+    type: 'text',
+    text: t,
+    quickReply: {
+      items: buttons.map((b) => ({ type: 'action', action: { type: 'postback', label: b.label, data: b.data, displayText: b.said } })),
+    },
+  };
+}
+
+/** An image LINE downloads from an https URL (JPEG or PNG). */
+export const image = (url: string): LineMessage => ({ type: 'image', originalContentUrl: url, previewImageUrl: url });
+
+/** The bytes of an image the user sent (e.g. a payment slip). */
+export async function getContent(token: string, messageId: string): Promise<{ bytes: Uint8Array; type: string }> {
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`LINE content failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  return { bytes: new Uint8Array(await res.arrayBuffer()), type: res.headers.get('content-type') ?? '' };
+}
+
 /** Answer an event (free, but the reply token works only once and only shortly after the event). */
 export function reply(token: string, replyToken: string, messages: LineMessage[]) {
   return call(token, '/message/reply', { replyToken, messages });

@@ -319,3 +319,76 @@ export async function setNicknameForContract(contractId: string, nickname: strin
   const c = mustOne(await sb.from('contracts').select('tenant_id').eq('id', contractId).single());
   await updateTenant(c.tenant_id, { nickname });
 }
+
+/* ------------------------------------------------------------------ bills on LINE (0010) */
+export type RunSummary = import('../../supabase/functions/_shared/core').RunSummary;
+export type SendRun = Tables<'line_send_runs'>;
+
+/** Error code from an Edge Function's { error: 'CODE' } answer, as a normal error. */
+async function functionError(error: unknown): Promise<never> {
+  let code = '';
+  try { code = (await (error as { context?: Response }).context?.json())?.error ?? ''; } catch { /* not JSON */ }
+  throw { message: code || (error as Error).message };
+}
+
+/** "Generate & send via LINE": makes the month's bills (like Generate) and sends every bill not
+ *  sent yet to tenants linked to LINE. Safe to press twice: a bill is never sent twice. */
+export async function sendBillsOnLine(month: string): Promise<RunSummary> {
+  const { data, error } = await sb.functions.invoke<{ summary: RunSummary }>('monthly-bills', { body: { mode: 'send', month } });
+  if (error) return functionError(error);
+  return data!.summary;
+}
+
+export async function lastSendRun(): Promise<SendRun | null> {
+  return must(await sb.from('line_send_runs').select('*').neq('kind', 'reminders').order('ran_at', { ascending: false }).limit(1))?.[0] ?? null;
+}
+
+/** LINE accounts the owner can choose for the monthly summary: anyone who has messaged the OA. */
+export async function knownLineAccounts(): Promise<{ line_user_id: string; name: string }[]> {
+  const rows = must(await sb.from('line_link_requests').select('line_user_id, line_display_name, created_at').order('created_at', { ascending: false })) ?? [];
+  const seen = new Map<string, string>();
+  for (const r of rows) if (!seen.has(r.line_user_id)) seen.set(r.line_user_id, r.line_display_name || r.line_user_id.slice(0, 8));
+  return [...seen].map(([line_user_id, name]) => ({ line_user_id, name }));
+}
+
+/* ------------------------------------------------------------------ payment slips (0010) */
+export type Slip = Tables<'payment_slips'> & {
+  url: string | null;                       // signed link to the photo (1 hour)
+  bill: BillSummary | null;
+  tenant: { full_name: string; nickname: string } | null;
+  original: { received_at: string; status: string } | null;   // for duplicates: the first slip
+};
+
+/** Slips sent in the LINE chat that staff have not checked yet, newest first. */
+export async function listPendingSlips(): Promise<Slip[]> {
+  const slips = must(await sb.from('payment_slips').select('*').eq('status', 'pending').order('received_at', { ascending: false })) ?? [];
+  if (slips.length === 0) return [];
+  const billIds = [...new Set(slips.map((s) => s.bill_id).filter((x): x is string => !!x))];
+  const tenantIds = [...new Set(slips.map((s) => s.tenant_id).filter((x): x is string => !!x))];
+  const origIds = [...new Set(slips.map((s) => s.duplicate_of).filter((x): x is string => !!x))];
+  const [bills, tenants, originals, urls] = await Promise.all([
+    billIds.length ? sb.from('bill_summary').select('*').in('id', billIds).then(must) : Promise.resolve([]),
+    tenantIds.length ? sb.from('tenants').select('id, full_name, nickname').in('id', tenantIds).then(must) : Promise.resolve([]),
+    origIds.length ? sb.from('payment_slips').select('id, received_at, status').in('id', origIds).then(must) : Promise.resolve([]),
+    sb.storage.from('slips').createSignedUrls(slips.map((s) => s.storage_path), 3600),
+  ]);
+  const urlOf = new Map((urls.data ?? []).map((u) => [u.path, u.signedUrl]));
+  return slips.map((s) => ({
+    ...s,
+    url: urlOf.get(s.storage_path) ?? null,
+    bill: (bills ?? []).find((b) => b.id === s.bill_id) ?? null,
+    tenant: (tenants ?? []).find((t) => t.id === s.tenant_id) ?? null,
+    original: (originals ?? []).find((o) => o.id === s.duplicate_of) ?? null,
+  }));
+}
+
+/** Staff checked the slip with the bank: records the payment (bank transfer) and closes the slip. */
+export async function confirmSlip(slipId: string, amount: number, paidOn: string, note: string): Promise<string> {
+  return mustOne(await sb.rpc('confirm_slip', { p_slip_id: slipId, p_amount: amount, p_paid_on: paidOn, p_note: note }));
+}
+
+export async function rejectSlip(slipId: string, userId: string | undefined) {
+  must(await sb.from('payment_slips')
+    .update({ status: 'rejected', checked_at: new Date().toISOString(), checked_by: userId ?? null })
+    .eq('id', slipId).eq('status', 'pending').select('id'));
+}

@@ -47,6 +47,8 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261123151116_no_water_meter.sql` | The water meter is no longer read |
 | `20261124144133_admin_only_prices.sql` | Only the owner (admin) can change rent / water prices |
 | `20261124144201_line_linking.sql` | Payment details in Settings, tenant nickname, LINE link requests, approve / reject, move-out clears the LINE link |
+| `20261125093453_line_billing.sql` | Bills on LINE: sent / reminded / payment choice on each bill, payment slips (duplicate check), send-run summaries, private storage buckets |
+| `20261125100100_line_cron_jobs.sql` | Schedules the monthly bills (1st, 08:00) and daily reminders (09:00). **Apply last, after the cron secret exists** (see "LINE" below) |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 
@@ -145,7 +147,9 @@ The repo includes `wrangler.jsonc`, which serves the built `dist/` folder.
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Type check + production build into `dist/` (one `index.html`) |
 | `npm run test:billing` | Bill calculations (3 example rooms incl. a partial payment), rounding, due dates, dashboard totals |
-| `npm run test:guide` | The guide has all 5 topics, every step in both Thai and English |
+| `npm run test:guide` | The guide has all topics (5 + 3 LINE), every step in both Thai and English |
+| `npm run test:line` | LINE signature check, room numbers typed in the chat, "101 (nickname)" labels |
+| `npm run test:promptpay` | PromptPay QR payload and CRC16, slip QR references, payment buttons, bill/reminder/summary messages |
 | `npm run import:old -- --dry-run` | Import report (writes nothing) |
 
 ## How billing works
@@ -158,6 +162,38 @@ The repo includes `wrangler.jsonc`, which serves the built `dist/` folder.
 - **Payments**: several payments per bill are allowed. The status (*unpaid / partly paid / paid*) is computed from them, and the database refuses a payment larger than the balance. Each payment gets a receipt number (`R-000001`, …).
 
 Money is shown in Thai baht with 2 decimals (฿1,234.50). Dates are shown as DD/MM/YYYY, with the Buddhist year in Thai (24/11/2569).
+
+## LINE
+
+The LINE Official Account talks to three Edge Functions in `supabase/functions/`:
+
+| Function | Called by | Protection |
+|---|---|---|
+| `line-webhook` | LINE (every chat message, button tap, slip photo) | `verify_jwt = false`; every request must carry LINE's signature made with `LINE_CHANNEL_SECRET` |
+| `line-link` | The app's Approve / Reject buttons | Logged-in users only; runs as that user (RLS) |
+| `monthly-bills` | The scheduled jobs, and the app's "Generate & send via LINE" | `verify_jwt = false`; accepts only the cron secret header or a logged-in admin/staff login |
+
+Webhook URL for the LINE Developers console: `https://YOUR-PROJECT-REF.supabase.co/functions/v1/line-webhook`
+(Messaging API tab → Webhook URL → Verify, then turn **Use webhook** on. In LINE OA Manager → Response settings, turn **Auto-response messages off** and **Webhooks on**.)
+
+**Secrets** (Supabase → Edge Functions → Secrets; never in code, `.env` or git): `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`.
+
+### LINE: scheduled jobs
+
+The jobs send the cron secret to `monthly-bills`; it must be stored in **two** places with the same value.
+
+1. Supabase → **SQL Editor**, run once (it makes a random 64-character secret inside the database and shows it to you once):
+   ```sql
+   select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'cron_secret', 'monthly-bills cron secret');
+   select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret';
+   ```
+2. Copy the shown value into **Edge Functions → Secrets** as `CRON_SECRET`. Do not paste it anywhere else.
+3. Apply `20261125100100_line_cron_jobs.sql`.
+4. In the app: **Settings → Send bills on LINE automatically** on. While it is off, the jobs run but do nothing.
+
+To stop the jobs: `select cron.unschedule('line-monthly-bills'); select cron.unschedule('line-bill-reminders');`
+
+LINE's free plan includes a limited number of pushed messages per month (bills, reminders, approvals). Replies to a tenant's button tap are free.
 
 ## Troubleshooting
 

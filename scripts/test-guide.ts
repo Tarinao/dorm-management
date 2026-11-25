@@ -9,8 +9,8 @@ const checkPair = (p: Pair, where: string) => {
   assert.ok(thai.test(p[1]), `${where}: Thai text missing`);
 };
 
-const required = ['check-in', 'meters', 'bills', 'payment', 'check-out'];
-assert.deepEqual(GUIDE.map((s) => s.id), required, 'the 5 required topics, in order');
+const required = ['check-in', 'meters', 'bills', 'payment', 'check-out', 'line-link', 'line-bills', 'line-slips'];
+assert.deepEqual(GUIDE.map((s) => s.id), required, 'the required topics, in order');
 let steps = 0;
 for (const s of GUIDE) {
   checkPair(s.title, `${s.id}.title`);

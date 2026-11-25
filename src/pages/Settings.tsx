@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { getSettings, listProfiles, setRole, updateSettings, type Profile, type Settings as SettingsRow } from '../lib/api';
+import { getSettings, knownLineAccounts, listProfiles, setRole, updateSettings, type Profile, type Settings as SettingsRow } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../lib/feedback';
 import { parseNum } from '../lib/format';
@@ -12,8 +12,8 @@ import { Btn, DataTable, Desc, Field, FormGrid, PageHead, Panel, PanelTitle } fr
 export default function Settings() {
   const { t } = useI18n();
   const { data, error, loading, reload } = useLoad(async () => {
-    const [settings, profiles] = await Promise.all([getSettings(), listProfiles()]);
-    return { settings, profiles };
+    const [settings, profiles, lineAccounts] = await Promise.all([getSettings(), listProfiles(), knownLineAccounts()]);
+    return { settings, profiles, lineAccounts };
   }, []);
 
   return (
@@ -23,7 +23,7 @@ export default function Settings() {
         {data && (
           <>
             <RatesForm key={data.settings.updated_at} s={data.settings} onSaved={reload} />
-            <PaymentForm key={'pay' + data.settings.updated_at} s={data.settings} onSaved={reload} />
+            <PaymentForm key={'pay' + data.settings.updated_at} s={data.settings} lineAccounts={data.lineAccounts} onSaved={reload} />
             <StaffList profiles={data.profiles} onSaved={reload} />
           </>
         )}
@@ -77,7 +77,9 @@ function RatesForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
 
 /** PromptPay / bank / office details that tenants receive on LINE. Values are typed in here by
  *  the owner only; nothing is pre-filled from code. */
-function PaymentForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
+function PaymentForm({ s, lineAccounts, onSaved }: {
+  s: SettingsRow; lineAccounts: { line_user_id: string; name: string }[]; onSaved: () => void;
+}) {
   const { t } = useI18n();
   const { toast } = useFeedback();
   const [busy, setBusy] = useState(false);
@@ -99,6 +101,9 @@ function PaymentForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
         bank_account_name: v('bank_account_name'), bank_account_number: account,
         office_location: v('office_location'), office_hours: v('office_hours'),
         auto_send_enabled: f.get('auto_send_enabled') === 'on',
+        // Only sent when changed, so the other fields can be saved on their own.
+        ...((v('summary_line_user_id') || null) !== (s.summary_line_user_id ?? null)
+          ? { summary_line_user_id: v('summary_line_user_id') || null } : {}),
       });
       toast(t('common.saved'));
       onSaved();
@@ -130,6 +135,15 @@ function PaymentForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
           <span>{t('settings.auto_send')}</span>
         </label>
         <Desc className="ml-[30px] mt-0 mb-4">{t('settings.auto_send_hint')}</Desc>
+        <Field label={t('settings.summary_line')} hint={t('settings.summary_line_hint')} className="mb-4 max-w-[480px]">
+          <select name="summary_line_user_id" defaultValue={s.summary_line_user_id ?? ''}>
+            <option value="">{t('settings.summary_none')}</option>
+            {s.summary_line_user_id && !lineAccounts.some((a) => a.line_user_id === s.summary_line_user_id) && (
+              <option value={s.summary_line_user_id}>{s.summary_line_user_id.slice(0, 8)}…</option>
+            )}
+            {lineAccounts.map((a) => <option key={a.line_user_id} value={a.line_user_id}>{a.name}</option>)}
+          </select>
+        </Field>
         <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.pay_save')}</Btn>
       </form>
     </Panel>
