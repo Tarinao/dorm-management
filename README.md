@@ -48,7 +48,7 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261124144133_admin_only_prices.sql` | Only the owner (admin) can change rent / water prices |
 | `20261124144201_line_linking.sql` | Payment details in Settings, tenant nickname, LINE link requests, approve / reject, move-out clears the LINE link |
 | `20261125093453_line_billing.sql` | Bills on LINE: sent / reminded / payment choice on each bill, payment slips (duplicate check), send-run summaries, private storage buckets |
-| `20261125100100_line_cron_jobs.sql` | Schedules the monthly bills (1st, 08:00) and daily reminders (09:00). **Apply last, after the cron secret exists** (see "LINE" below) |
+| `20261125104324_line_cron_jobs.sql` | Schedules the monthly bills (1st, 08:00 Bangkok) and daily reminders (09:00). Applied 2026-11-25. On a new project, apply it last, after the cron secret exists (see "LINE" below) |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 
@@ -188,7 +188,7 @@ The jobs send the cron secret to `monthly-bills`; it must be stored in **two** p
    select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret';
    ```
 2. Copy the shown value into **Edge Functions → Secrets** as `CRON_SECRET`. Do not paste it anywhere else.
-3. Apply `20261125100100_line_cron_jobs.sql`.
+3. Apply `20261125104324_line_cron_jobs.sql`.
 4. In the app: **Settings → Send bills on LINE automatically** on. While it is off, the jobs run but do nothing.
 
 To stop the jobs: `select cron.unschedule('line-monthly-bills'); select cron.unschedule('line-bill-reminders');`
