@@ -31,13 +31,13 @@ const TODAY = '2026-11-26';
 /* ---- a fake user + fake ports that remember what the bot did */
 type Fake = {
   user: BotUser; linkedRoom: string | null; now: number;
-  links: string[]; reservations: { name: string; phone: string; date: string }[]; notices: number;
+  links: string[]; viewings: { name: string; phone: string; date: string; slot: string }[]; notices: number;
   info: Record<string, { th: string; en: string }>;
 };
 function fake(over: Partial<Fake> = {}): Fake {
   return {
     user: { lang: null, menu_state: null, draft: {}, handover_until: null },
-    linkedRoom: null, now: NOW, links: [], reservations: [], notices: 0,
+    linkedRoom: null, now: NOW, links: [], viewings: [], notices: 0,
     // Settings values without Latin letters in Thai / Thai letters in English, so "one language" is checkable.
     info: {
       room_types: { th: 'ห้องพัดลม 3,500 บาท ห้องแอร์ 4,500 บาท', en: 'Fan room 3,500 baht, air-con room 4,500 baht' },
@@ -57,7 +57,7 @@ function portsOf(f: Fake): BotPorts {
     location: async () => ({ lat: 13.7563, lng: 100.5018 }),
     vacancy: async () => ({ count: 3, minRent: 3500, maxRent: 4500 }),
     requestLink: async (room) => { if (room === '999') return 'not_found'; f.links.push(room); return f.linkedRoom === room ? 'already_linked' : 'waiting'; },
-    createReservation: async (r) => { f.reservations.push(r); },
+    createViewing: async (r) => { f.viewings.push(r); },
     notifyOwner: async () => { f.notices++; },
   };
 }
@@ -121,8 +121,11 @@ for (const lang of ['th', 'en'] as const) {
     onlyLang(await send(f, tap(botData('book'))), lang, 'book');
     onlyLang(await send(f, say('สมชาย Smith')), lang === 'th' ? 'th' : 'en', 'book: phone question');
     onlyLang(await send(f, say('0812345678')), lang, 'book: date question');
-    const done = await send(f, say('15/12'));
+    onlyLang(await send(f, say('15/12')), lang, 'book: time question');
+    onlyLang(await send(f, say('??')), lang, 'book: time not understood');
+    const done = await send(f, tap(botData('slot', { k: 'afternoon' })));
     ok(texts(done)[0].includes('15/12/'), 'booking confirmation shows the date');
+    ok(texts(done)[0].toLowerCase().includes(TEXT[lang].btn.afternoon.toLowerCase()), 'booking confirmation shows the time of day');
     // The name the guest typed is echoed back; check the rest of the message.
     onlyLang({ messages: [{ type: 'text', text: texts(done)[0].replace('สมชาย Smith', '') }], patch: {} }, lang, 'booked');
     onlyLang(await send(f, tap(botData('contact'))), lang, 'contact');
@@ -250,7 +253,7 @@ await test('location: a LINE location message, then the address text', async () 
   eq([loc.latitude, loc.longitude, loc.address], [13.7563, 100.5018, '123 Sukhumvit Road, Bangkok']);
   eq(labels(last(r)), ['Back to menu', 'Contact staff']);
 });
-await test('booking: name -> phone -> date -> ONE pending reservation request', async () => {
+await test('booking a viewing: name -> phone -> date -> time of day -> ONE viewing (not a reservation)', async () => {
   const f = fake({ user: { lang: 'th', menu_state: null, draft: {}, handover_until: null } });
   await send(f, tap(botData('book')));
   await send(f, say('x'));                         eq(f.user.menu_state, 'book_name', 'too short');
@@ -258,9 +261,29 @@ await test('booking: name -> phone -> date -> ONE pending reservation request', 
   await send(f, say('12345'));                     eq(f.user.menu_state, 'book_phone', 'bad phone');
   await send(f, say('081-234-5678'));              eq(f.user.menu_state, 'book_date');
   await send(f, say('1/1/2500'));                  eq(f.user.menu_state, 'book_date', 'date in the past');
-  await send(f, say('20/12/2569'));
-  eq(f.reservations, [{ name: 'นก ใจดี', phone: '0812345678', date: '2026-12-20' }]);
+  await send(f, say('20/12/2569'));                eq(f.user.menu_state, 'book_time');
+  const ask = await send(f, say('พรุ่งนี้'));
+  eq(f.user.menu_state, 'book_time', 'not a time of day');
+  eq(labels(last(ask)), ['ช่วงเช้า', 'ช่วงบ่าย', 'ช่วงเย็น', 'ยกเลิก']);
+  eq(f.viewings, [], 'nothing saved yet');
+  await send(f, tap(botData('slot', { k: 'morning' })));
+  eq(f.viewings, [{ name: 'นก ใจดี', phone: '0812345678', date: '2026-12-20', slot: 'morning' }]);
   eq([f.user.menu_state, f.user.draft], [null, {}]);
+});
+await test('a typed time of day also works ("บ่าย", "evening")', async () => {
+  const draft = { name: 'Nok', phone: '0812345678', date: '2026-12-20' };
+  const th = fake({ user: { lang: 'th', menu_state: 'book_time', draft, handover_until: null } });
+  await send(th, say('ช่วงบ่ายค่ะ'));
+  eq(th.viewings.map((v) => v.slot), ['afternoon']);
+  const en = fake({ user: { lang: 'en', menu_state: 'book_time', draft, handover_until: null } });
+  await send(en, say('Evening please'));
+  eq(en.viewings.map((v) => v.slot), ['evening']);
+});
+await test('a time button tapped outside the viewing questions saves nothing and shows the menu', async () => {
+  const f = fake({ user: { lang: 'en', menu_state: null, draft: {}, handover_until: null } });
+  const r = await send(f, tap(botData('slot', { k: 'morning' })));
+  eq(f.viewings, []);
+  eq(labels(last(r)), mainMenuItems('en', false).map((i) => i.label));
 });
 await test('booking answers are processed even during handover (the user started them)', async () => {
   const f = fake({ user: { lang: 'en', menu_state: 'book_name', draft: {}, handover_until: new Date(NOW + 3600_000).toISOString() } });

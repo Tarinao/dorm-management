@@ -16,7 +16,7 @@
  *   everything else             -> the conversation in _shared/bot.ts: welcome + language choice
  *                                  on follow, main menu, dorm information (texts from line_info),
  *                                  connect my room (pending request, staff approve), book a
- *                                  viewing (PENDING reservation), contact staff (handover).
+ *                                  viewing (a viewing appointment, not a reservation), contact staff.
  * A room number never links by itself: only staff approval does (line-link function).
  * Every answer is a REPLY (free). The only push is the one "wants to talk" notice to the owner.
  *
@@ -187,11 +187,11 @@ async function ports(user: LineUserRow, linked: Linked | null, token: string): P
       return { count: data?.length ?? 0, minRent: rents.length ? Math.min(...rents) : null, maxRent: rents.length ? Math.max(...rents) : null };
     },
     requestLink: (room) => requestLink(user.line_user_id, room, linked?.room ?? null, token),
-    async createReservation(r) {
-      // Always PENDING and without a room: staff choose the room and confirm in the app.
-      const { error } = await db.from('reservations').insert({
-        guest_name: r.name, phone: r.phone, line_user_id: user.line_user_id, desired_move_in: r.date,
-        status: 'pending', source: 'line', note: user.display_name ? `LINE: ${user.display_name}` : 'LINE',
+    async createViewing(r) {
+      // A viewing appointment, NOT a reservation: no room is held. Staff confirm the time in the app.
+      const { error } = await db.from('viewings').insert({
+        guest_name: r.name, phone: r.phone, line_user_id: user.line_user_id, visit_date: r.date, time_of_day: r.slot,
+        status: 'requested', source: 'line', note: user.display_name ? `LINE: ${user.display_name}` : 'LINE',
       });
       if (error) throw error;
     },

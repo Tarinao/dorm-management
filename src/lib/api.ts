@@ -3,7 +3,7 @@
  * database functions, so they either fully happen or not at all. */
 import { sb } from './supabase';
 import type { Tables, Views } from './database.types';
-import { addMonths, byRoomNumber, monthEnd, tenantShort } from './format';
+import { addMonths, byRoomNumber, monthEnd, tenantShort, todayISO } from './format';
 import type { ContractLite, Reading } from './billing';
 
 export type Room = Tables<'rooms'>;
@@ -21,6 +21,8 @@ export type ReservationWithRoom = Reservation & { rooms: { number: string } | nu
 export type Ticket = Tables<'maintenance_tickets'>;
 export type TicketWithRoom = Ticket & { rooms: { number: string } | null };
 export type LineUser = Tables<'line_users'>;
+export type Viewing = Tables<'viewings'>;
+export type ViewingWithRoom = Viewing & { rooms: { number: string } | null };
 export type LineInfo = Tables<'line_info'>;
 export type RoomWithCurrent = Room & {
   current: ContractWithTenant | null;
@@ -441,7 +443,8 @@ export async function getReservation(id: string): Promise<ReservationWithRoom | 
 }
 
 export type ReservationInput = Pick<Reservation,
-  'room_id' | 'guest_name' | 'phone' | 'desired_move_in' | 'expires_on' | 'booking_fee' | 'booking_fee_paid_on' | 'booking_fee_method' | 'note'>;
+  'room_id' | 'guest_name' | 'phone' | 'desired_move_in' | 'expires_on' | 'booking_fee' | 'booking_fee_paid_on' | 'booking_fee_method' | 'note'>
+  & { line_user_id?: string | null };   // carried over when the reservation is made from a LINE viewing
 
 /** New booking (pending, or confirmed straight away) or an edit. The database checks the room
  *  rules and the one-booking-per-room rule. */
@@ -577,14 +580,56 @@ export async function saveLineInfo(rows: { key: string; text_th: string; text_en
 
 /* ------------------------------------------------------------------ dashboard extras */
 export async function loadDashboardExtras() {
-  const [tickets, reservations] = await Promise.all([
+  const [tickets, reservations, viewings] = await Promise.all([
     sb.from('maintenance_tickets').select('id, priority').in('status', ['open', 'in_progress']).then(must),
     sb.from('reservations').select('id, status').in('status', ['pending', 'confirmed']).then(must),
+    sb.from('viewings').select('id, status').in('status', ['requested', 'confirmed']).gte('visit_date', todayISO()).then(must),
   ]);
   return {
+    requestedViewings: (viewings ?? []).filter((x) => x.status === 'requested').length,
+    upcomingViewings: viewings?.length ?? 0,
     openTickets: tickets?.length ?? 0,
     urgentTickets: (tickets ?? []).filter((x) => x.priority === 'urgent').length,
     pendingReservations: (reservations ?? []).filter((x) => x.status === 'pending').length,
     confirmedReservations: (reservations ?? []).filter((x) => x.status === 'confirmed').length,
   };
+}
+
+/* ------------------------------------------------------------------ viewings (0014) */
+/* A viewing = someone comes to SEE a room. Nothing is held: it is not a reservation. */
+export type ViewingFilter = 'open' | 'requested' | 'closed' | 'all';
+export type ViewingStatus = 'requested' | 'confirmed' | 'viewed' | 'no_show' | 'cancelled';
+export const TIMES_OF_DAY = ['morning', 'afternoon', 'evening', 'any'] as const;
+
+/** 'open' = requested + confirmed, soonest first; 'closed' = viewed, no-show, cancelled, latest first. */
+export async function listViewings(filter: ViewingFilter): Promise<ViewingWithRoom[]> {
+  let q = sb.from('viewings').select('*, rooms(number)');
+  if (filter === 'open') q = q.in('status', ['requested', 'confirmed']);
+  else if (filter === 'closed') q = q.in('status', ['viewed', 'no_show', 'cancelled']);
+  else if (filter === 'requested') q = q.eq('status', 'requested');
+  const rows = must(await q.order('visit_date', { ascending: filter !== 'closed' }).order('visit_time', { ascending: true, nullsFirst: false }).limit(500)) ?? [];
+  return rows as ViewingWithRoom[];
+}
+
+export type ViewingInput = Pick<Viewing, 'guest_name' | 'phone' | 'visit_date' | 'time_of_day' | 'visit_time' | 'room_id' | 'note'>;
+
+export async function saveViewing(id: string | null, x: ViewingInput): Promise<Viewing> {
+  const row = { ...x, guest_name: x.guest_name.trim(), phone: x.phone.trim(), note: x.note.trim() };
+  if (id) return mustOne(await sb.from('viewings').update(row).eq('id', id).select('*').single());
+  return mustOne(await sb.from('viewings').insert({ ...row, status: 'requested' }).select('*').single());
+}
+
+export async function setViewingStatus(id: string, status: ViewingStatus) {
+  must(await sb.from('viewings').update({ status }).eq('id', id).select('id').single());
+}
+
+/** After "Reserve a room" on a viewing: remember which reservation came from it. */
+export async function linkViewingReservation(id: string, reservationId: string) {
+  must(await sb.from('viewings').update({ reservation_id: reservationId, status: 'viewed' }).eq('id', id).select('id').single());
+}
+
+/** Admin only (RLS). Returns false when nothing was deleted. */
+export async function deleteViewing(id: string): Promise<boolean> {
+  const rows = must(await sb.from('viewings').delete().eq('id', id).select('id'));
+  return (rows?.length ?? 0) > 0;
 }

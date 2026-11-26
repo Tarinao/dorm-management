@@ -54,6 +54,10 @@ const PILL: Record<string, string> = {
   in_progress: 'bg-teal-soft text-teal',
   done: 'bg-sage-soft text-sage',
   urgent: 'bg-terracotta-soft text-terracotta',
+  // viewings (0014)
+  requested: 'bg-amber-soft text-amber',
+  viewed: 'bg-sage-soft text-sage',
+  no_show: 'bg-terracotta-soft text-terracotta',
 };
 export function Pill({ status, children, className = '' }: { status: string; children: ReactNode; className?: string }) {
   return <span className={cx('inline-block px-[10px] py-[3px] rounded-[20px] text-[11.5px] font-semibold', PILL[status], className)}>{children}</span>;

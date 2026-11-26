@@ -117,6 +117,9 @@ export const IconWrench = (p: IconProps) => (
 export const IconChat = (p: IconProps) => (
   <Svg {...p}><path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" /><path d="M8 9.5h8M8 12.5h5" /></Svg>
 );
+export const IconEye = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></Svg>
+);
 export const IconCamera = (p: IconProps) => (
   <Svg {...p}><path d="M4 8h3l1.8-2.5h6.4L17 8h3v11H4z" /><circle cx="12" cy="13.3" r="3.3" /></Svg>
 );

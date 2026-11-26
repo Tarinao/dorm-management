@@ -4,7 +4,8 @@
  * and 20261124144201_line_linking.sql (marked "0009", hand-written; applied 2026-11-24)
  * and 20261125093453_line_billing.sql (marked "0010", hand-written)
  * and 20261126101653_reservations_maintenance.sql (marked "0012", hand-written)
- * and 20261126101711_line_bot.sql (marked "0013", hand-written).
+ * and 20261126101711_line_bot.sql (marked "0013", hand-written)
+ * and 20261126193657_viewings.sql (marked "0014", hand-written).
  * Hand edits marked "edited": move_in's p_tenant_id and p_end_date accept null
  * (the SQL function handles null; the generator cannot tell).
  * Regenerate after any schema change. */
@@ -41,6 +42,12 @@ type LineUserRow = {
   draft: Json; handover_until: string | null; wants_talk_at: string | null; first_seen: string; last_seen: string;
 };
 type LineInfoRow = { key: string; text_th: string; text_en: string; updated_at: string };
+/* 0014 */
+type ViewingRow = {
+  id: string; guest_name: string; phone: string; line_user_id: string | null; visit_date: string; time_of_day: string;
+  visit_time: string | null; room_id: string | null; status: string; note: string; source: string;
+  reservation_id: string | null; created_by: string | null; created_at: string; updated_at: string;
+};
 type BotSettings = { office_phone: string; location_lat: number | null; location_lng: number | null };
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -186,6 +193,15 @@ export type Database = {
         Update: Partial<ReservationRow>;
         Relationships: [
           { foreignKeyName: 'reservations_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
+        ];
+      };
+      viewings: { // 0014
+        Row: ViewingRow;
+        Insert: Partial<ViewingRow> & { guest_name: string; visit_date: string };
+        Update: Partial<ViewingRow>;
+        Relationships: [
+          { foreignKeyName: 'viewings_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
+          { foreignKeyName: 'viewings_reservation_id_fkey'; columns: ['reservation_id']; isOneToOne: false; referencedRelation: 'reservations'; referencedColumns: ['id'] },
         ];
       };
       maintenance_tickets: { // 0012

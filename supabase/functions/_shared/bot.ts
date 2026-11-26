@@ -1,5 +1,5 @@
 /* The LINE OA conversation: welcome -> language -> main menu -> dorm information / connect my
- * room / contact staff / book a viewing.
+ * room / contact staff / book a viewing (a viewing appointment, NOT a reservation).
  *
  * botReply() decides WHAT to answer and how the user's row in line_users changes. It does no I/O
  * itself: everything it needs from the database or LINE comes through `ports`, so the whole flow
@@ -24,8 +24,12 @@ import { MSG, baht, dmy, parseRoomNumber } from './core.ts';
 import { LINK_1, type Lang } from './lang.ts';
 
 export type { Lang } from './lang.ts';
-export type MenuState = 'ask_room' | 'book_name' | 'book_phone' | 'book_date';
-export const MENU_STATES: readonly MenuState[] = ['ask_room', 'book_name', 'book_phone', 'book_date'];
+export type MenuState = 'ask_room' | 'book_name' | 'book_phone' | 'book_date' | 'book_time';
+export const MENU_STATES: readonly MenuState[] = ['ask_room', 'book_name', 'book_phone', 'book_date', 'book_time'];
+
+/** When the guest would like to come; staff agree the exact time when they call back. */
+export const SLOTS = ['morning', 'afternoon', 'evening'] as const;
+export type Slot = typeof SLOTS[number];
 
 export interface BotUser {
   lang: Lang | null;
@@ -54,7 +58,7 @@ export interface BotPorts {
   location(): Promise<{ lat: number; lng: number } | null>;
   vacancy(): Promise<{ count: number; minRent: number | null; maxRent: number | null }>;
   requestLink(room: string): Promise<'waiting' | 'not_found' | 'already_linked'>;
-  createReservation(r: { name: string; phone: string; date: string }): Promise<void>;
+  createViewing(r: { name: string; phone: string; date: string; slot: Slot }): Promise<void>;
   notifyOwner(): Promise<void>;
 }
 
@@ -70,8 +74,8 @@ const KEYWORDS = ['เมนู', 'menu', 'เริ่มใหม่', 'start'
 export const isMenuKeyword = (t: string | null | undefined) => KEYWORDS.includes(String(t ?? '').trim().toLowerCase());
 
 /* ------------------------------------------------------------------ postback data */
-export type BotAction = 'menu' | 'lang' | 'langpick' | 'info' | 'connect' | 'contact' | 'book' | 'cancel';
-const ACTIONS: readonly BotAction[] = ['menu', 'lang', 'langpick', 'info', 'connect', 'contact', 'book', 'cancel'];
+export type BotAction = 'menu' | 'lang' | 'langpick' | 'info' | 'connect' | 'contact' | 'book' | 'slot' | 'cancel';
+const ACTIONS: readonly BotAction[] = ['menu', 'lang', 'langpick', 'info', 'connect', 'contact', 'book', 'slot', 'cancel'];
 export const INFO_ANSWERS = ['room_types', 'available', 'facilities', 'location', 'house_rules', 'deposit_terms'] as const;
 export type InfoAnswer = typeof INFO_ANSWERS[number];
 
@@ -90,13 +94,14 @@ type Texts = {
   langSet: string; menuIntro: string; notUnderstood: string;
   btn: { info: string; connect: string; contact: string; language: string; back: string; cancel: string;
          room_types: string; available: string; facilities: string; location: string; house_rules: string;
-         deposit_terms: string; book: string };
+         deposit_terms: string; book: string; morning: string; afternoon: string; evening: string };
   infoIntro: string; infoMissing: string;
   vacancy: (n: number, min: number | null, max: number | null) => string; noVacancy: string;
   askRoom: string; notRoom: string; alreadyLinked: (r: string) => string;
   contact: (hours: string, phone: string) => string;
   bookName: string; bookNameBad: string; bookPhone: string; bookPhoneBad: string;
-  bookDate: string; bookDateBad: string; booked: (name: string, date: string) => string;
+  bookDate: string; bookDateBad: string; bookTime: string; bookTimeBad: string;
+  booked: (name: string, date: string, slot: string) => string;
 };
 
 export const TEXT: Record<Lang, Texts> = {
@@ -108,13 +113,14 @@ export const TEXT: Record<Lang, Texts> = {
       info: 'ข้อมูลหอพัก', connect: 'เชื่อมต่อห้องของฉัน', contact: 'ติดต่อเจ้าหน้าที่', language: 'เปลี่ยนภาษา',
       back: 'กลับเมนูหลัก', cancel: 'ยกเลิก',
       room_types: 'ประเภทห้องและราคา', available: 'ห้องว่างตอนนี้', facilities: 'สิ่งอำนวยความสะดวก',
-      location: 'ที่ตั้งและแผนที่', house_rules: 'กฎของหอพัก', deposit_terms: 'เงินประกันและสัญญา', book: 'นัดดูห้อง / จองห้อง',
+      location: 'ที่ตั้งและแผนที่', house_rules: 'กฎของหอพัก', deposit_terms: 'เงินประกันและสัญญา', book: 'นัดดูห้อง',
+      morning: 'ช่วงเช้า', afternoon: 'ช่วงบ่าย', evening: 'ช่วงเย็น',
     },
     infoIntro: 'อยากทราบข้อมูลเรื่องไหนคะ',
     infoMissing: 'ขออภัยค่ะ ยังไม่มีข้อมูลเรื่องนี้ กรุณาติดต่อเจ้าหน้าที่',
     vacancy: (n, min, max) => `ตอนนี้มีห้องว่าง ${n} ห้อง` +
       (min !== null && max !== null ? (min === max ? `\nค่าเช่า ${baht(min)} ต่อเดือน` : `\nค่าเช่า ${baht(min)} – ${baht(max)} ต่อเดือน`) : ''),
-    noVacancy: 'ตอนนี้ห้องเต็มทุกห้องค่ะ สามารถนัดดูห้องหรือจองคิวไว้ได้',
+    noVacancy: 'ตอนนี้ห้องเต็มทุกห้องค่ะ แต่ยังนัดเข้ามาดูห้องได้',
     askRoom: 'กรุณาพิมพ์เลขห้องของคุณ เช่น 101',
     notRoom: 'กรุณาพิมพ์เฉพาะเลขห้อง เช่น 101',
     alreadyLinked: (r) => `บัญชีนี้เชื่อมต่อกับห้อง ${r} อยู่แล้วค่ะ`,
@@ -129,9 +135,11 @@ export const TEXT: Record<Lang, Texts> = {
     bookNameBad: 'กรุณาพิมพ์ชื่อ-นามสกุล (2–100 ตัวอักษร)',
     bookPhone: 'กรุณาพิมพ์เบอร์โทรศัพท์ที่ติดต่อได้ เช่น 0812345678',
     bookPhoneBad: 'เบอร์โทรไม่ถูกต้อง กรุณาพิมพ์ใหม่ เช่น 0812345678',
-    bookDate: 'อยากเข้ามาดูห้องหรือย้ายเข้าวันไหนคะ พิมพ์วันที่ เช่น 15/12/2569',
+    bookDate: 'อยากเข้ามาดูห้องวันไหนคะ พิมพ์วันที่ เช่น 15/12/2569',
     bookDateBad: 'วันที่ไม่ถูกต้อง กรุณาพิมพ์วันที่ภายใน 1 ปีนับจากวันนี้ เช่น 15/12/2569',
-    booked: (name, date) => `ขอบคุณค่ะ คุณ${name}\nได้รับคำขอสำหรับวันที่ ${date} แล้ว\nเจ้าหน้าที่จะติดต่อกลับเพื่อยืนยัน (ยังไม่ได้ยืนยันการจองจนกว่าเจ้าหน้าที่จะติดต่อกลับ)`,
+    bookTime: 'สะดวกช่วงเวลาไหนคะ',
+    bookTimeBad: 'กรุณาเลือกช่วงเวลาจากปุ่มด้านล่างค่ะ',
+    booked: (name, date, slot) => `ขอบคุณค่ะ คุณ${name}\nได้รับคำขอนัดดูห้องวันที่ ${date} ${slot} แล้ว\nเจ้าหน้าที่จะติดต่อกลับเพื่อยืนยันเวลา (การนัดดูห้องยังไม่ใช่การจองห้อง)`,
   },
   en: {
     langSet: 'English selected.',
@@ -142,12 +150,13 @@ export const TEXT: Record<Lang, Texts> = {
       back: 'Back to menu', cancel: 'Cancel',
       room_types: 'Room types & prices', available: 'Available rooms', facilities: 'Facilities',
       location: 'Location', house_rules: 'House rules', deposit_terms: 'Deposit & contract', book: 'Book a viewing',
+      morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening',
     },
     infoIntro: 'What would you like to know?',
     infoMissing: 'Sorry, this information is not available yet. Please contact staff.',
     vacancy: (n, min, max) => `${n} ${n === 1 ? 'room is' : 'rooms are'} available now` +
       (min !== null && max !== null ? (min === max ? `\nRent ${baht(min)} per month` : `\nRent ${baht(min)} – ${baht(max)} per month`) : ''),
-    noVacancy: 'All rooms are taken right now. You can still book a viewing or join the waiting list.',
+    noVacancy: 'All rooms are taken right now, but you can still book a viewing.',
     askRoom: 'Please type your room number, e.g. 101',
     notRoom: 'Please type only the room number, e.g. 101',
     alreadyLinked: (r) => `This account is already connected to room ${r}.`,
@@ -162,9 +171,11 @@ export const TEXT: Record<Lang, Texts> = {
     bookNameBad: 'Please type your full name (2–100 characters).',
     bookPhone: 'Please type a phone number we can call, e.g. 0812345678',
     bookPhoneBad: 'That phone number does not look right. Please type it again, e.g. 0812345678',
-    bookDate: 'Which day would you like to view the room or move in? Type a date, e.g. 15/12/2026',
+    bookDate: 'Which day would you like to come and see the room? Type a date, e.g. 15/12/2026',
     bookDateBad: 'That date does not look right. Please type a date within the next year, e.g. 15/12/2026',
-    booked: (name, date) => `Thank you, ${name}!\nWe received your request for ${date}.\nStaff will contact you to confirm. It is not confirmed until they do.`,
+    bookTime: 'What time of day suits you?',
+    bookTimeBad: 'Please choose a time of day from the buttons below.',
+    booked: (name, date, slot) => `Thank you, ${name}!\nWe received your viewing request for ${date}, ${slot.toLowerCase()}.\nStaff will contact you to confirm the time. A viewing does not reserve a room.`,
   },
 };
 
@@ -221,6 +232,7 @@ export function infoMenuItems(lang: Lang): QuickItem[] {
 }
 const endItems = (lang: Lang) => [q(TEXT[lang].btn.back, 'menu'), q(TEXT[lang].btn.contact, 'contact')];
 const cancelItems = (lang: Lang) => [q(TEXT[lang].btn.cancel, 'cancel')];
+export const slotItems = (lang: Lang) => [...SLOTS.map((v) => q(TEXT[lang].btn[v], 'slot', { k: v })), ...cancelItems(lang)];
 
 /* ------------------------------------------------------------------ input parsing */
 const THAI_DIGITS = '๐๑๒๓๔๕๖๗๘๙';
@@ -259,6 +271,15 @@ export function parseVisitDate(text: string, today: string): string | null {
   const out = date.toISOString().slice(0, 10);
   const max = new Date(Date.UTC(ty + 1, tm - 1, td)).toISOString().slice(0, 10);
   return out >= today && out <= max ? out : null;
+}
+
+/** A time of day typed instead of tapped: "เช้า", "บ่าย", "เย็น", "morning", ... */
+export function parseSlot(text: string): Slot | null {
+  const s = text.trim().toLowerCase();
+  if (/เช้า|morning/.test(s)) return 'morning';
+  if (/บ่าย|afternoon/.test(s)) return 'afternoon';
+  if (/เย็น|ค่ำ|evening/.test(s)) return 'evening';
+  return null;
 }
 
 /* ------------------------------------------------------------------ the conversation */
@@ -358,6 +379,13 @@ async function answerAction(action: BotAction, k: string | undefined, lang: Lang
     case 'book':
       return { messages: [textMsg(T.bookName, cancelItems(lang))], patch: { menu_state: 'book_name', draft: {} } };
 
+    case 'slot': {
+      const slot = SLOTS.find((x) => x === k);
+      // A time button from an old message, outside the viewing questions: just show the menu.
+      if (user.menu_state !== 'book_time' || !slot) return mainMenu(lang, linked);
+      return saveViewing(slot, lang, user, ports);
+    }
+
     default:
       return mainMenu(lang, linked);
   }
@@ -384,16 +412,26 @@ async function answerInput(text: string, lang: Lang, user: BotUser, ports: BotPo
     case 'book_date': {
       const date = parseVisitDate(t, ports.today);
       if (!date) return { messages: [textMsg(T.bookDateBad, cancelItems(lang))], patch: {} };
-      const name = user.draft.name ?? '', phone = user.draft.phone ?? '';
-      if (!name || !phone) {   // should not happen; start the questions again
-        return { messages: [textMsg(T.bookName, cancelItems(lang))], patch: { menu_state: 'book_name', draft: {} } };
-      }
-      await ports.createReservation({ name, phone, date });
-      return { messages: [textMsg(T.booked(name, dmy(date, lang)), endItems(lang))], patch: idle };
+      return { messages: [textMsg(T.bookTime, slotItems(lang))], patch: { menu_state: 'book_time', draft: { ...user.draft, date } } };
+    }
+    case 'book_time': {
+      const slot = parseSlot(t);
+      if (!slot) return { messages: [textMsg(T.bookTimeBad, slotItems(lang))], patch: {} };
+      return saveViewing(slot, lang, user, ports);
     }
     default:
       return mainMenu(lang, ports.linkedRoom !== null);
   }
+}
+
+async function saveViewing(slot: Slot, lang: Lang, user: BotUser, ports: BotPorts): Promise<BotReply> {
+  const T = TEXT[lang];
+  const name = user.draft.name ?? '', phone = user.draft.phone ?? '', date = user.draft.date ?? '';
+  if (!name || !phone || !date) {   // should not happen; start the questions again
+    return { messages: [textMsg(T.bookName, cancelItems(lang))], patch: { menu_state: 'book_name', draft: {} } };
+  }
+  await ports.createViewing({ name, phone, date, slot });
+  return { messages: [textMsg(T.booked(name, dmy(date, lang), T.btn[slot]), endItems(lang))], patch: idle };
 }
 
 async function linkRoom(room: string, lang: Lang | null, ports: BotPorts): Promise<BotReply> {

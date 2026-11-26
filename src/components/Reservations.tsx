@@ -14,10 +14,14 @@ import { LoadState, NumInput, StatusPill } from './common';
 import { IconReceipt } from './icons';
 import { AlertBar, Btn, BtnRow, Desc, Field, FormGrid, Modal, ModalClose } from './ui';
 
+/** Guest details carried into a new reservation, e.g. from a viewing ("Reserve a room"). */
+export type ReservationPrefill = { guest_name: string; phone: string; line_user_id: string | null; note: string; room_id: string | null };
+
 /** Create or edit a reservation. Rooms that cannot be booked are shown disabled with the reason
  *  (the same rules the database enforces; the database has the final word). */
-export function ReservationDialog({ reservation, roomId, onClose, onSaved }: {
-  reservation: Reservation | null; roomId?: string; onClose: () => void; onSaved: () => void;
+export function ReservationDialog({ reservation, roomId, prefill, onClose, onSaved }: {
+  reservation: Reservation | null; roomId?: string; prefill?: ReservationPrefill;
+  onClose: () => void; onSaved: (saved: Reservation) => void;
 }) {
   const { t, money } = useI18n();
   const { toast } = useFeedback();
@@ -26,7 +30,7 @@ export function ReservationDialog({ reservation, roomId, onClose, onSaved }: {
   const [desired, setDesired] = useState(reservation?.desired_move_in ?? todayISO());
   const [expires, setExpires] = useState(reservation?.expires_on ?? defaultExpiry(todayISO()));
   const [expiresTouched, setExpiresTouched] = useState(!!reservation && reservation.expires_on !== defaultExpiry(reservation.desired_move_in));
-  const [room, setRoom] = useState(reservation?.room_id ?? roomId ?? '');
+  const [room, setRoom] = useState(reservation?.room_id ?? roomId ?? prefill?.room_id ?? '');
   const self = reservation?.id ?? null;
 
   const changeDesired = (v: string) => {
@@ -46,14 +50,15 @@ export function ReservationDialog({ reservation, roomId, onClose, onSaved }: {
     }
     setBusy(true);
     try {
-      await saveReservation(self, {
+      const saved = await saveReservation(self, {
         room_id: room || null, guest_name: s('guest_name'), phone: s('phone'),
         desired_move_in: desired, expires_on: expires,
         booking_fee: fee, booking_fee_paid_on: paidOn, booking_fee_method: paidOn ? (s('method') === 'transfer' ? 'transfer' : 'cash') : null,
         note: s('note'),
+        ...(!self && prefill?.line_user_id ? { line_user_id: prefill.line_user_id } : {}),
       }, confirmNow);
       toast(t('res.saved'));
-      onSaved();
+      onSaved(saved);
     } catch (e) { toast(friendlyError(e, t), 'error'); setBusy(false); }
   };
 
@@ -79,8 +84,8 @@ export function ReservationDialog({ reservation, roomId, onClose, onSaved }: {
                   })}
                 </select>
               </Field>
-              <Field label={t('res.f.guest_name')}><input name="guest_name" required defaultValue={reservation?.guest_name ?? ''} autoComplete="off" maxLength={100} /></Field>
-              <Field label={t('f.phone')}><input name="phone" type="tel" inputMode="tel" defaultValue={reservation?.phone ?? ''} autoComplete="off" maxLength={30} /></Field>
+              <Field label={t('res.f.guest_name')}><input name="guest_name" required defaultValue={reservation?.guest_name ?? prefill?.guest_name ?? ''} autoComplete="off" maxLength={100} /></Field>
+              <Field label={t('f.phone')}><input name="phone" type="tel" inputMode="tel" defaultValue={reservation?.phone ?? prefill?.phone ?? ''} autoComplete="off" maxLength={30} /></Field>
               <Field label={t('res.f.desired')}><input type="date" required value={desired} onChange={(e) => changeDesired(e.target.value)} /></Field>
               <Field label={t('res.f.expires')} hint={t('res.f.expires_hint')}>
                 <input type="date" required value={expires} min={desired} onChange={(e) => { setExpires(e.target.value); setExpiresTouched(true); }} />
@@ -98,7 +103,7 @@ export function ReservationDialog({ reservation, roomId, onClose, onSaved }: {
                   ))}
                 </div>
               </Field>
-              <Field label={t('common.notes')} className="col-span-full"><textarea name="note" rows={2} defaultValue={reservation?.note ?? ''} /></Field>
+              <Field label={t('common.notes')} className="col-span-full"><textarea name="note" rows={2} defaultValue={reservation?.note ?? prefill?.note ?? ''} /></Field>
             </FormGrid>
             {(!reservation || reservation.status === 'pending') && (
               <label className="flex items-start gap-2.5 mb-4 text-[14.5px]">

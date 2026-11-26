@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useI18n, type TKey } from '../lib/i18n';
-import { IconBuilding, IconCalendar, IconChart, IconGauge, IconGlobe, IconHelp, IconLogout, IconReceipt, IconSettings, IconWallet, IconWrench, Logo } from './icons';
+import { IconBuilding, IconCalendar, IconChart, IconEye, IconGauge, IconGlobe, IconHelp, IconLogout, IconReceipt, IconSettings, IconWallet, IconWrench, Logo } from './icons';
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 interface NavItem { to: string; key: TKey; icon: Icon; adminOnly?: boolean; mobileBar?: boolean }
@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { to: '/meters', key: 'nav.meters', icon: IconGauge, mobileBar: true },
   { to: '/billing', key: 'nav.billing', icon: IconReceipt, mobileBar: true },
   { to: '/payments', key: 'nav.bills', icon: IconWallet, mobileBar: true },
+  { to: '/viewings', key: 'nav.viewings', icon: IconEye },
   { to: '/reservations', key: 'nav.reservations', icon: IconCalendar },
   { to: '/maintenance', key: 'nav.maintenance', icon: IconWrench },
   { to: '/guide', key: 'nav.guide', icon: IconHelp },

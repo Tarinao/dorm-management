@@ -6,7 +6,7 @@ import { currentMonth, fromMonthInput, toMonthInput } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState } from '../components/common';
-import { IconAlert, IconCalendar, IconWrench, RoomStatusIcon } from '../components/icons';
+import { IconAlert, IconCalendar, IconEye, IconWrench, RoomStatusIcon } from '../components/icons';
 import { LineChats } from '../components/LineChats';
 import { Field, PageHead, Panel, PanelTitle, Stat, Stats } from '../components/ui';
 
@@ -51,13 +51,22 @@ export default function Dashboard() {
 
             <LineChats />
 
-            <div className="grid grid-cols-2 gap-3 mb-[22px]">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-[22px]">
               <Link to="/maintenance" className="flex items-center gap-3 border border-line rounded p-4 bg-paper-raised no-underline text-ink hover:border-teal">
                 <IconWrench size={28} className={data.extras.urgentTickets > 0 ? 'text-terracotta' : 'text-amber'} />
                 <div>
                   <div className="font-display text-2xl font-semibold tabular-nums">{data.extras.openTickets}</div>
                   <div className="text-[12.5px] text-muted">{t('dash.open_tickets')}
                     {data.extras.urgentTickets > 0 && <span className="text-terracotta font-semibold"> · {t('dash.open_tickets_foot', { u: data.extras.urgentTickets })}</span>}
+                  </div>
+                </div>
+              </Link>
+              <Link to="/viewings" className="flex items-center gap-3 border border-line rounded p-4 bg-paper-raised no-underline text-ink hover:border-teal">
+                <IconEye size={28} className={data.extras.requestedViewings > 0 ? 'text-amber' : 'text-teal'} />
+                <div>
+                  <div className="font-display text-2xl font-semibold tabular-nums">{data.extras.upcomingViewings}</div>
+                  <div className="text-[12.5px] text-muted">{t('dash.viewings')}
+                    {data.extras.requestedViewings > 0 && <span className="text-amber font-semibold"> · {t('dash.viewings_foot', { r: data.extras.requestedViewings })}</span>}
                   </div>
                 </div>
               </Link>

@@ -115,6 +115,19 @@ export const GUIDE: readonly GuideSection[] = [
     ],
   },
   {
+    id: 'viewings',
+    title: ['Viewings (someone comes to see a room)', 'นัดดูห้อง'],
+    intro: ['When someone wants to come and look at a room. A viewing does NOT hold a room: that is a reservation.', 'เมื่อมีคนอยากเข้ามาดูห้อง การนัดดูห้องไม่ได้กันห้องไว้ การกันห้องคือ "การจอง"'],
+    steps: [
+      ['Requests from the LINE chat ("Book a viewing") appear in "Viewings" as "Requested", with the day and the time of day they chose.', 'คำขอจากแชท LINE ("นัดดูห้อง") จะขึ้นในหน้า "นัดดูห้อง" เป็น "ขอนัด" พร้อมวันและช่วงเวลาที่ลูกค้าเลือก'],
+      ['Call the guest to agree the exact time. Tap "Edit", fill in the exact time (and the room to show, if you know it), then tap "Confirm".', 'โทรหาลูกค้าเพื่อตกลงเวลา แตะ "แก้ไข" กรอกเวลาที่นัด (และห้องที่จะพาดู ถ้าทราบ) แล้วแตะ "ยืนยันนัด"'],
+      ['Someone asked by phone or walked in? Tap "New viewing" and type their name, phone and day.', 'ลูกค้าโทรมาหรือเดินเข้ามาถาม แตะ "นัดดูห้องใหม่" แล้วกรอกชื่อ เบอร์โทร และวันที่'],
+      ['After the visit tap "Viewed", or "No-show" if they did not come. Viewings whose day has passed get an orange border until you do.', 'หลังลูกค้ามาดูห้อง แตะ "ดูห้องแล้ว" หรือ "ไม่มาตามนัด" ถ้าไม่มา นัดที่เลยวันแล้วจะมีกรอบสีส้มจนกว่าจะกด'],
+      ['If they want the room, tap "Reserve a room": the reservation form opens with their name and phone.', 'ถ้าลูกค้าต้องการห้อง แตะ "จองห้อง" ฟอร์มการจองจะเปิดพร้อมชื่อและเบอร์โทร'],
+    ],
+    tip: ['The Dashboard shows how many viewings are coming and how many still need a call. Only the owner can delete a viewing.', 'หน้าภาพรวมแสดงจำนวนนัดดูห้องที่กำลังจะมา และจำนวนที่ยังต้องโทรยืนยัน เฉพาะเจ้าของหอเท่านั้นที่ลบนัดได้'],
+  },
+  {
     id: 'reservations',
     title: ['Reservations (booking a room)', 'การจองห้อง'],
     intro: ['When someone wants a room before moving in. A room can have only one active booking.', 'เมื่อมีคนต้องการจองห้องไว้ก่อนย้ายเข้า หนึ่งห้องมีการจองที่ยังไม่ปิดได้เพียงรายการเดียว'],
@@ -124,7 +137,7 @@ export const GUIDE: readonly GuideSection[] = [
       ['Type the guest’s name, phone and move-in date. The booking expires 7 days after that date unless you change it.', 'กรอกชื่อ เบอร์โทร และวันย้ายเข้าของผู้จอง การจองจะหมดอายุ 7 วันหลังวันนั้น ถ้าไม่เปลี่ยน'],
       ['If the guest paid a booking fee, type the amount, the date and Cash or Transfer. A receipt number (B-…) is made; tap it to print.', 'ถ้าผู้จองจ่ายค่าจอง กรอกจำนวนเงิน วันที่ และเงินสดหรือโอน ระบบจะออกเลขใบเสร็จ (B-…) แตะเพื่อพิมพ์'],
       ['Tap "Confirm" when the booking is sure. A vacant room turns "Reserved".', 'แตะ "ยืนยันการจอง" เมื่อการจองแน่นอนแล้ว ห้องว่างจะเปลี่ยนเป็น "จองแล้ว"'],
-      ['Requests from LINE ("From LINE") have no room yet: call the guest, tap "Edit" to choose a room, then "Confirm".', 'คำขอจาก LINE ("จาก LINE") ยังไม่มีห้อง ให้โทรหาผู้จอง แตะ "แก้ไข" เพื่อเลือกห้อง แล้วแตะ "ยืนยันการจอง"'],
+      ['After a viewing, tap "Reserve a room" on it in "Viewings": the name and phone are filled in for you.', 'หลังลูกค้าดูห้องแล้ว แตะ "จองห้อง" ที่นัดนั้นในหน้า "นัดดูห้อง" ชื่อและเบอร์โทรจะถูกกรอกให้'],
       ['On move-in day tap "Convert to move-in". The check-in form opens with the name, phone and date filled in, and the paid booking fee counts toward the deposit.', 'วันย้ายเข้า แตะ "ย้ายเข้าจากการจอง" ฟอร์มทำสัญญาจะเปิดพร้อมชื่อ เบอร์โทร และวันที่ และค่าจองที่จ่ายแล้วจะนับเป็นส่วนหนึ่งของเงินประกัน'],
       ['If the guest changes their mind, tap "Cancel booking". The room becomes free again.', 'ถ้าผู้จองเปลี่ยนใจ แตะ "ยกเลิกการจอง" ห้องจะกลับมาว่าง'],
     ],
