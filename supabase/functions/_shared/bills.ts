@@ -2,6 +2,7 @@
  * bill's contract (with their LINE account). Runs with the service-role client. */
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.2';
 import { PAY_BUTTON, payOrder, payPostback, type BillForMessage, type PayDetails } from './core.ts';
+import { PAY_BUTTON_1, type Lang } from './lang.ts';
 
 export type BillRow = {
   id: string; room_id: string; room_number: string; contract_id: string | null; month: string; due_date: string;
@@ -68,9 +69,13 @@ export function forMessage(x: LoadedBill): BillForMessage {
   };
 }
 
-/** The three payment buttons for a bill, last month's choice first. */
-export function payButtons(billId: string, lastChoice: string | null) {
-  return payOrder(lastChoice).map((m) => ({ label: PAY_BUTTON[m].label, said: PAY_BUTTON[m].said, data: payPostback(m, billId) }));
+/** The three payment buttons for a bill, last month's choice first. Without `lang` the labels
+ *  are the original ones (used by monthly-bills); with it, labels in the tenant's chosen language. */
+export function payButtons(billId: string, lastChoice: string | null, lang?: Lang | null) {
+  return payOrder(lastChoice).map((m) => {
+    const label = lang ? PAY_BUTTON_1[lang][m] : PAY_BUTTON[m].label;
+    return { label, said: lang ? label : PAY_BUTTON[m].said, data: payPostback(m, billId) };
+  });
 }
 
 export type SettingsRow = PayDetails & {

@@ -5,7 +5,10 @@ A web app for running a 44-room dormitory, in Thai and English, that works on a 
 - **Rooms & tenants**: room status, tenant details, contracts, check-in and check-out.
 - **Meters & billing**: enter the electric meter, then make every bill for the month in one step. Water is a flat price per person.
 - **Payments**: full or partial payments (cash / transfer), a printable receipt for each payment, and an overdue list.
-- **Dashboard**: occupancy, expected vs collected income, outstanding balance, rooms with overdue bills.
+- **Reservations**: bookings with a booking fee and a printable receipt, at most one active booking per room, "Convert to move-in" (the fee counts toward the deposit), automatic expiry.
+- **Maintenance**: repair tickets with photos, priority and cost; a ticket can block a vacant room until it is fixed.
+- **LINE OA chat**: welcome in Thai and English, language choice, menu, dorm information, "Connect my room", "Book a viewing", "Contact staff" (the bot goes quiet so staff can chat).
+- **Dashboard**: occupancy, expected vs collected income, outstanding balance, rooms with overdue bills, open repairs, bookings, and people who want to talk on LINE.
 - **How to use**: a step-by-step guide for workers, in Thai and English.
 
 Built with React + Vite + TypeScript + Tailwind, and [Supabase](https://supabase.com) (database and login).
@@ -48,7 +51,9 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261124144133_admin_only_prices.sql` | Only the owner (admin) can change rent / water prices |
 | `20261124144201_line_linking.sql` | Payment details in Settings, tenant nickname, LINE link requests, approve / reject, move-out clears the LINE link |
 | `20261125093453_line_billing.sql` | Bills on LINE: sent / reminded / payment choice on each bill, payment slips (duplicate check), send-run summaries, private storage buckets |
-| `20261125104324_line_cron_jobs.sql` | Schedules the monthly bills (1st, 08:00 Bangkok) and daily reminders (09:00). Applied 2026-11-25. On a new project, apply it last, after the cron secret exists (see "LINE" below) |
+| `20261125104324_line_cron_jobs.sql` | Schedules the monthly bills (1st, 08:00 Bangkok) and daily reminders (09:00). Applied 2026-11-25. On a new project, apply it after the cron secret exists (see "LINE" below) |
+| `20261126101653_reservations_maintenance.sql` | Reservations (one active booking per room, booking-fee receipts B-000001, expiry), maintenance tickets (block a vacant room), private "maintenance" photo bucket, move-in from a reservation, move-out keeps bookings / blocks, nightly expiry job (00:05 Bangkok). Applied 2026-11-26 |
+| `20261126101711_line_bot.sql` | LINE chat: `line_users` (language, menu step, handover, "wants to talk"), `line_info` (dorm information in Thai + English, empty at first), office phone + map pin in Settings. Applied 2026-11-26 |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 
@@ -77,7 +82,10 @@ To check it worked, open **Table Editor**: you should see the tables, with 44 ro
 | Rooms, check-in / check-out, meters, bills, payments, receipts | ✔ | ✔ |
 | Change room prices (rent, water price, people) | ✔ | ✘ (shown read-only; check-in uses the room's prices) |
 | Settings page (rates, due day, staff access) | ✔ | ✘ |
-| Delete anything (bills, extra charges, payments) | ✔ | ✘ |
+| Reservations: create, confirm, cancel, convert to move-in | ✔ | ✔ |
+| Maintenance tickets: create, edit, photos, close | ✔ | ✔ |
+| LINE info (what the bot answers) | ✔ | ✘ |
+| Delete anything (bills, extra charges, payments, reservations, tickets) | ✔ | ✘ |
 
 These rules are enforced by the database (RLS policies and triggers), not only by hiding buttons.
 
@@ -144,12 +152,16 @@ The repo includes `wrangler.jsonc`, which serves the built `dist/` folder.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Run locally |
-| `npm run typecheck` | TypeScript check |
+| `npm run typecheck` | TypeScript check of the app and of the Edge Functions (`tsconfig.functions.json`, no Deno needed) |
 | `npm run build` | Type check + production build into `dist/` (one `index.html`) |
 | `npm run test:billing` | Bill calculations (3 example rooms incl. a partial payment), rounding, due dates, dashboard totals |
 | `npm run test:guide` | The guide has all topics (5 + 3 LINE), every step in both Thai and English |
 | `npm run test:line` | LINE signature check, room numbers typed in the chat, "101 (nickname)" labels |
 | `npm run test:promptpay` | PromptPay QR payload and CRC16, slip QR references, payment buttons, bill/reminder/summary messages |
+| `npm run test:bot` | The LINE conversation: follow → language → menu, one language afterwards, handover silence, the "menu" keyword, linked vs unlinked menus, booking, payment postbacks left alone, label lengths, rich menu |
+| `npm run test:reservations` | Reservation rules: double booking, occupied rooms need a move-out date, maintenance blocks, room status afterwards, expiry, deposit credit |
+| `npm test` | All of the test scripts above |
+| `npm run richmenu:png` | Draws the LINE rich menu picture `supabase/line/richmenu.png` (nothing is sent anywhere) |
 | `npm run import:old -- --dry-run` | Import report (writes nothing) |
 
 ## How billing works
@@ -195,8 +207,52 @@ To stop the jobs: `select cron.unschedule('line-monthly-bills'); select cron.uns
 
 LINE's free plan includes a limited number of pushed messages per month (bills, reminders, approvals). Replies to a tenant's button tap are free.
 
+## Reservations and maintenance
+
+- **One active booking per room.** "Active" = waiting to confirm or confirmed. The database refuses a second one (unique index + trigger), so two people can never hold the same room, even from two phones at once.
+- **Which rooms can be booked:** vacant rooms, and occupied rooms whose contract has an end date (the booking's move-in date must be on or after it). A room in maintenance cannot be booked or moved into.
+- **Room status follows the booking:** confirming makes a vacant room *Reserved*; cancelling, expiring or deleting puts it back (*Occupied* / *Maintenance* / *Vacant*). When a booked tenant's room is checked out as "Vacant", it becomes *Reserved* for the next guest.
+- **Booking fee:** amount, date and cash/transfer give a receipt `B-000001` (print it from the booking). "Convert to move-in" opens the check-in form with the guest's name, phone and date, and the paid fee is recorded on the contract as part of the deposit (`contracts.booking_fee_credit`).
+- **Expiry:** each booking has an *expires on* date (7 days after the move-in date unless changed). Every night at 00:05 (Bangkok) the job `reservations-expire` closes bookings past that date. To stop it: `select cron.unschedule('reservations-expire');`
+- **LINE requests:** "Book a viewing" in the LINE chat creates a booking *waiting to confirm* without a room. Staff call the guest, choose a room (Edit) and confirm. The bot never confirms by itself.
+- **Maintenance block:** "Block the room" on a ticket sets a vacant room to *Maintenance* while the ticket is open or in progress; done / cancelled (or unticking the box) frees it. Occupied rooms keep their status. Photos are in the private Storage bucket `maintenance` (staff see them through 1-hour links).
+
+**Database tests.** `supabase/tests/reservations_maintenance.test.sql` and `supabase/tests/line_bot.test.sql` run every rule above against the real triggers, as an admin and as a staff login, inside one transaction that is **rolled back** at the end (nothing is kept). Run them in the SQL editor after applying the migrations. Before release they were run against all migrations on a local Postgres (PGlite); each passed, and each fails when an expectation is changed on purpose.
+
+## LINE chat (welcome, menu, contact staff)
+
+Everything in this section is in `line-webhook` and `supabase/functions/_shared/bot.ts`. All answers are replies (free); the only push is one notice to the owner when someone asks for staff.
+
+1. **Follow:** a welcome in Thai and English, then [ภาษาไทย] [English]. The choice is saved (`line_users.lang`) and from then on the bot writes only in that language: menus, answers, room linking, payment-button replies, slip replies, and the approve / reject message from the app. (The monthly bill and reminder messages from `monthly-bills` are unchanged: Thai first, then English.)
+2. **Main menu:** Dorm information · Connect my room (hidden once the LINE account is linked to a tenant) · Contact staff · Language.
+3. **Dorm information:** room types & prices, available rooms (live count of *Vacant* rooms and their rent range), facilities, location (a LINE map pin + the address), house rules, deposit & contract terms, and "Book a viewing" (name → phone → date → a booking waiting to confirm). The texts come from **Settings → LINE info** (Thai and English, owner only). An empty text makes the bot say the information is not available yet; nothing is hardcoded.
+4. **Contact staff:** the bot answers with the office hours and phone (Settings), the person appears on the Dashboard under **Wants to talk** (red number), the owner's summary LINE account gets one message, and the bot stays quiet for that person for 12 hours so staff can chat in LINE OA Manager. Staff tap **Done** when finished (or "Done, let the bot answer again").
+5. **"เมนู", "menu", "เริ่มใหม่", "start"** always bring the menu back, also during the quiet time. Anything else the bot does not understand gets a short "I didn't understand" and the menu, except during the quiet time.
+6. **Unchanged:** a room number typed in the chat still creates a link request that staff approve; payment buttons and slips work exactly as before (slips are saved even during the quiet time).
+
+**Rich menu (optional).** `npm run richmenu:png` draws `supabase/line/richmenu.png` (2500 × 843, app colours, four buttons: Info, My room, Contact, TH / EN). The buttons send the same postbacks as the menu, so they answer in the user's language. Creating it on the LINE account is a separate, explicit step that changes what every follower sees:
+```powershell
+$env:LINE_CHANNEL_ACCESS_TOKEN="paste-the-token-here"
+npm run richmenu:create -- --yes                    # or: --yes --image my-design.png
+Remove-Item Env:LINE_CHANNEL_ACCESS_TOKEN
+```
+Remove it again in LINE OA Manager → Rich menus.
+
+### Release order for these features
+
+1. Apply `20261126101653_reservations_maintenance.sql`, then `20261126101711_line_bot.sql`. (Done 2026-11-26.)
+2. Run the two files in `supabase/tests/` in the SQL editor (they roll back). (Done 2026-11-26: both passed.) Note: they use one booking receipt number, because sequences are not rolled back; reset with `select setval('public.booking_receipt_seq', 1, false);` while there are no bookings yet.
+3. Deploy the web app (it reads the new tables, so not before step 1).
+4. Fill in **Settings → LINE info**, office phone and map pin.
+5. Deploy `line-link`, then `line-webhook` (**not before the 1 December billing run has finished**). Test with your own LINE account: unfollow / follow the OA.
+6. Optional: create the rich menu.
+
 ## Troubleshooting
 
 - **"Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY"**: `.env` is missing or incomplete (locally), or the Cloudflare *build* variables are not set. Fix it, then restart `npm run dev` or rebuild.
 - **"Waiting for approval" after logging in**: the account has no role yet. See step 4.
 - **"You do not have permission for this"** or **"Only the owner can change prices"**: a staff account tried something only the owner can do.
+- **"This room already has an active reservation"**: cancel or finish the other booking first (Reservations page, filter "Active").
+- **"The current tenant has no move-out date"**: set the contract end date on the room page, then book the room.
+- **"This room is reserved for someone else"**: use "Convert to move-in" on that booking, or cancel it.
+- **The bot does not answer someone**: they probably tapped "Contact staff" less than 12 hours ago. Tap "Done, let the bot answer again" on the Dashboard, or ask them to type "menu".

@@ -5,22 +5,29 @@
  * is rejected with 401 before anything is read or written.
  *
  * Handles:
- *   follow                      -> reply "please type your room number"
- *   text that is a room number  -> one pending link request (staff approve it in the app)
- *                                  and reply "waiting for staff to confirm"
  *   postback "pay=...&bill=..." -> the payment button under a bill: PromptPay QR (exact balance),
  *                                  bank details, or office location/hours. Saved on the bill.
+ *                                  (Same logic as before; the reply is in the tenant's chosen
+ *                                  language, or bilingual as before if none was chosen.)
  *   image from a linked tenant  -> a payment slip: stored in the private "slips" bucket, its QR
  *                                  reference saved (UNIQUE: a second copy is flagged as duplicate),
  *                                  staff check and confirm it in the app. Never marks a bill paid.
+ *                                  Works also while staff are chatting (handover).
+ *   everything else             -> the conversation in _shared/bot.ts: welcome + language choice
+ *                                  on follow, main menu, dorm information (texts from line_info),
+ *                                  connect my room (pending request, staff approve), book a
+ *                                  viewing (PENDING reservation), contact staff (handover).
  * A room number never links by itself: only staff approval does (line-link function).
+ * Every answer is a REPLY (free). The only push is the one "wants to talk" notice to the owner.
  *
  * Secrets (Edge Function secrets, never in code): LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN.
  * SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase to every function. */
 import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
-import { MSG, PAY_REPLY, SLIP_REPLY, parsePayPostback, parseRoomNumber, verifyLineSignature } from '../_shared/core.ts';
+import { PAY_REPLY, SLIP_REPLY, bangkokToday, parsePayPostback, verifyLineSignature } from '../_shared/core.ts';
 import { loadBills, loadSettings, payButtons } from '../_shared/bills.ts';
-import { getContent, getProfile, image, reply, text, textWithButtons, type LineMessage } from '../_shared/line.ts';
+import { getContent, getProfile, image, push, reply, text, textWithButtons, type LineMessage } from '../_shared/line.ts';
+import { PAY_REPLY_1, SLIP_REPLY_1, isLang, type Lang } from '../_shared/lang.ts';
+import { MENU_STATES, botReply, ownerNotice, type BotEvent, type BotPorts, type BotUser, type UserPatch } from '../_shared/bot.ts';
 import { promptPayKind, promptPayPayload, slipKey } from '../_shared/promptpay.ts';
 import { qrPng } from '../_shared/qrimage.ts';
 import { readSlipQr } from '../_shared/slipqr.ts';
@@ -72,53 +79,143 @@ Deno.serve(async (req) => {
   return new Response('OK');
 });
 
+type LineUserRow = BotUser & { line_user_id: string; display_name: string };
+
 async function handleEvent(ev: LineEvent, token: string) {
   const userId = ev.source?.type === 'user' ? ev.source.userId : undefined;
-  if (!userId) return;                       // groups / rooms are not used
-  const answerWith = (msgs: LineMessage[]) => (ev.replyToken ? reply(token, ev.replyToken, msgs) : Promise.resolve());
-  const answer = (msg: string) => answerWith([text(msg)]);
+  if (!userId || !/^U[0-9a-f]{32}$/.test(userId)) return;   // groups / rooms are not used
+  if (ev.type === 'unfollow') return;
+  const answerWith = (msgs: LineMessage[]) => (ev.replyToken && msgs.length ? reply(token, ev.replyToken, msgs) : Promise.resolve());
 
-  if (ev.type === 'follow') {
-    await answer(MSG.askRoom);
+  // The bot's own table must never stop payment buttons or slips (e.g. if this function were
+  // deployed before migration 0013): on any problem they run as before, bilingual.
+  let user: LineUserRow | null = null;
+  try {
+    user = await ensureUser(userId, token);
+  } catch (e) {
+    console.error('line-webhook: line_users not available:', e instanceof Error ? e.message : String(e));
+  }
+  const lang = user?.lang ?? null;
+
+  // ---- payment buttons: unchanged logic
+  if (ev.type === 'postback' && parsePayPostback(ev.postback?.data)) {
+    await handlePayButton(userId, ev.postback?.data, answerWith, lang);
     return;
   }
 
-  if (ev.type === 'postback') {
-    await handlePayButton(userId, ev.postback?.data, answerWith);
+  const linked = await linkedTenantOf(userId);
+
+  // ---- slips from linked tenants: unchanged logic (also during handover)
+  if (ev.type === 'message' && ev.message?.type === 'image' && ev.message.id && linked) {
+    await answerWith([text(await saveSlip(userId, linked, ev.message.id, token, lang))]);
     return;
   }
 
-  if (ev.type === 'message' && ev.message?.type === 'image' && ev.message.id) {
-    const linked = await linkedTenantOf(userId);
-    if (!linked) { await answer(MSG.askRoom); return; }
-    await answer(await saveSlip(userId, linked, ev.message.id, token));
-    return;
+  // ---- the conversation
+  if (!user) return;
+  let event: BotEvent;
+  if (ev.type === 'follow') event = { kind: 'follow' };
+  else if (ev.type === 'postback') event = { kind: 'postback', data: String(ev.postback?.data ?? '') };
+  else if (ev.type === 'message' && ev.message?.type === 'text') event = { kind: 'text', text: String(ev.message.text ?? '') };
+  else if (ev.type === 'message') event = { kind: 'other' };
+  else return;                                              // join, leave, beacon, ...
+
+  const result = await botReply(event, user, await ports(user, linked, token));
+  if (!result) return;
+  await saveUser(userId, result.patch);
+  await answerWith(result.messages as LineMessage[]);
+}
+
+/* ------------------------------------------------------------------ line_users */
+/** The user's row (created on first contact, with their LINE name), last_seen updated. */
+async function ensureUser(userId: string, token: string): Promise<LineUserRow> {
+  const cols = 'line_user_id, display_name, lang, menu_state, draft, handover_until';
+  const { data, error } = await db.from('line_users').select(cols).eq('line_user_id', userId).maybeSingle();
+  if (error) throw error;
+  let row = data as Record<string, unknown> | null;
+  if (!row) {
+    const profile = await getProfile(token, userId);
+    const ins = await db.from('line_users')
+      .upsert({ line_user_id: userId, display_name: profile.displayName, picture_url: profile.pictureUrl }, { onConflict: 'line_user_id', ignoreDuplicates: true })
+      .select(cols).maybeSingle();
+    if (ins.error) throw ins.error;
+    row = (ins.data as Record<string, unknown> | null) ?? { line_user_id: userId, display_name: profile.displayName };
+  } else {
+    const { error: upErr } = await db.from('line_users').update({ last_seen: new Date().toISOString() }).eq('line_user_id', userId);
+    if (upErr) console.error('line-webhook: last_seen:', upErr.message);
   }
+  return {
+    line_user_id: userId,
+    display_name: String(row.display_name ?? ''),
+    lang: isLang(row.lang) ? row.lang : null,
+    menu_state: MENU_STATES.find((s) => s === row!.menu_state) ?? null,
+    draft: (row.draft && typeof row.draft === 'object' ? row.draft : {}) as Record<string, string>,
+    handover_until: (row.handover_until as string | null) ?? null,
+  };
+}
 
-  if (ev.type !== 'message' || ev.message?.type !== 'text') return;
+async function saveUser(userId: string, patch: UserPatch) {
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await db.from('line_users').update(patch as Record<string, unknown>).eq('line_user_id', userId);
+  if (error) throw error;
+}
 
-  const linkedRoom = (await linkedTenantOf(userId))?.room ?? null;
-  const room = parseRoomNumber(ev.message.text);
+/* ------------------------------------------------------------------ what the bot can look up / do */
+async function ports(user: LineUserRow, linked: Linked | null, token: string): Promise<BotPorts> {
+  const { data: s, error } = await db.from('settings')
+    .select('dorm_name, office_hours, office_phone, location_lat, location_lng, summary_line_user_id').eq('id', 1).single();
+  if (error) throw error;
 
-  if (!room) {
-    // A linked tenant chatting with the office: leave it to staff in LINE OA Manager.
-    if (!linkedRoom) await answer(MSG.askRoom);
-    return;
-  }
+  return {
+    now: Date.now(),
+    today: bangkokToday(),
+    dormName: String(s.dorm_name ?? ''),
+    linkedRoom: linked?.room ?? null,
 
+    async info(key) {
+      const { data, error } = await db.from('line_info').select('text_th, text_en').eq('key', key).maybeSingle();
+      if (error) throw error;
+      return { th: String(data?.text_th ?? ''), en: String(data?.text_en ?? '') };
+    },
+    contact: async () => ({ hours: String(s.office_hours ?? ''), phone: String(s.office_phone ?? '') }),
+    location: async () =>
+      s.location_lat != null && s.location_lng != null ? { lat: Number(s.location_lat), lng: Number(s.location_lng) } : null,
+    async vacancy() {
+      const { data, error } = await db.from('rooms').select('default_rent').eq('status', 'vacant');
+      if (error) throw error;
+      const rents = (data ?? []).map((r) => Number(r.default_rent)).filter((n) => n > 0);
+      return { count: data?.length ?? 0, minRent: rents.length ? Math.min(...rents) : null, maxRent: rents.length ? Math.max(...rents) : null };
+    },
+    requestLink: (room) => requestLink(user.line_user_id, room, linked?.room ?? null, token),
+    async createReservation(r) {
+      // Always PENDING and without a room: staff choose the room and confirm in the app.
+      const { error } = await db.from('reservations').insert({
+        guest_name: r.name, phone: r.phone, line_user_id: user.line_user_id, desired_move_in: r.date,
+        status: 'pending', source: 'line', note: user.display_name ? `LINE: ${user.display_name}` : 'LINE',
+      });
+      if (error) throw error;
+    },
+    async notifyOwner() {
+      const to = s.summary_line_user_id as string | null;
+      if (!to) return;
+      try {
+        await push(token, to, [text(ownerNotice(user.display_name || '?', linked?.room ?? null))]);
+      } catch (e) {
+        console.error('line-webhook: owner notice failed:', e instanceof Error ? e.message : String(e));
+      }
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ room linking (unchanged rules) */
+/** Same rules as before: unknown room -> nothing created; one pending request per LINE user
+ *  (typing again updates it); staff approve in the app. */
+async function requestLink(userId: string, room: string, linkedRoom: string | null, token: string): Promise<'waiting' | 'not_found' | 'already_linked'> {
   const { data: found, error: roomErr } = await db.from('rooms').select('id, number').eq('number', room).maybeSingle();
   if (roomErr) throw roomErr;
-  if (!found) {
-    await answer(MSG.roomNotFound(room));     // an unknown room number never creates a request
-    return;
-  }
+  if (!found) return 'not_found';
+  if (linkedRoom === found.number) return 'already_linked';
 
-  if (linkedRoom === found.number) {
-    await answer(MSG.alreadyLinked(found.number));
-    return;
-  }
-
-  // Already waiting? Update the room they typed instead of adding another request.
   const { data: pending, error: pendErr } = await db.from('line_link_requests')
     .select('id').eq('line_user_id', userId).eq('status', 'pending').maybeSingle();
   if (pendErr) throw pendErr;
@@ -138,7 +235,7 @@ async function handleEvent(ev: LineEvent, token: string) {
     // 23505 = a request was created a moment ago by a parallel event: that one counts.
     if (error && error.code !== '23505') throw error;
   }
-  await answer(MSG.waiting);
+  return 'waiting';
 }
 
 type Linked = { tenantId: string; room: string; contractIds: string[] };
@@ -158,17 +255,18 @@ async function linkedTenantOf(userId: string): Promise<Linked | null> {
 }
 
 /* ------------------------------------------------------------------ payment buttons */
-async function handlePayButton(userId: string, data: string | undefined, answerWith: (m: LineMessage[]) => Promise<void>) {
+async function handlePayButton(userId: string, data: string | undefined, answerWith: (m: LineMessage[]) => Promise<void>, lang: Lang | null) {
   const choice = parsePayPostback(data);
   if (!choice) return;
+  const R = lang ? PAY_REPLY_1[lang] : PAY_REPLY;
   const [x] = await loadBills(db, { ids: [choice.billId] });
   // Only the tenant the bill belongs to gets its payment details.
   if (!x || !x.tenant?.line_user_id || x.tenant.line_user_id !== userId) {
-    await answerWith([text(PAY_REPLY.notYours)]);
+    await answerWith([text(R.notYours)]);
     return;
   }
   const balance = Number(x.bill.balance);
-  if (balance <= 0) { await answerWith([text(PAY_REPLY.paid)]); return; }
+  if (balance <= 0) { await answerWith([text(R.paid)]); return; }
 
   const { error } = await db.from('bills')
     .update({ pay_method_chosen: choice.method, pay_method_chosen_at: new Date().toISOString() }).eq('id', x.bill.id);
@@ -177,15 +275,15 @@ async function handlePayButton(userId: string, data: string | undefined, answerW
   const s = await loadSettings(db);
   const room = x.bill.room_number;
   // "Not set up" keeps the buttons, so the tenant can pick another way.
-  const notReady = () => answerWith([textWithButtons(PAY_REPLY.notReady, payButtons(x.bill.id, null))]);
+  const notReady = () => answerWith([textWithButtons(R.notReady, payButtons(x.bill.id, null, lang))]);
 
   if (choice.method === 'promptpay') {
     if (!promptPayKind(s.promptpay_id)) { await notReady(); return; }
     const url = await promptPayImageUrl(x.bill.id, s.promptpay_id, balance);
-    await answerWith([text(PAY_REPLY.promptpay(room, balance)), image(url)]);
+    await answerWith([text(R.promptpay(room, balance)), image(url)]);
     return;
   }
-  const msg = choice.method === 'transfer' ? PAY_REPLY.transfer(room, balance, s) : PAY_REPLY.cash(room, balance, s);
+  const msg = choice.method === 'transfer' ? R.transfer(room, balance, s) : R.cash(room, balance, s);
   if (!msg) { await notReady(); return; }
   await answerWith([text(msg)]);
 }
@@ -204,7 +302,8 @@ async function promptPayImageUrl(billId: string, promptpayId: string, amount: nu
 }
 
 /* ------------------------------------------------------------------ payment slips */
-async function saveSlip(userId: string, linked: Linked, messageId: string, token: string): Promise<string> {
+async function saveSlip(userId: string, linked: Linked, messageId: string, token: string, lang: Lang | null): Promise<string> {
+  const R = lang ? SLIP_REPLY_1[lang] : SLIP_REPLY;
   const { bytes, type } = await getContent(token, messageId);
   const ext = type.includes('png') ? 'png' : 'jpg';
   const path = `${linked.tenantId}/${messageId}.${ext}`;
@@ -223,13 +322,14 @@ async function saveSlip(userId: string, linked: Linked, messageId: string, token
   const row = { line_message_id: messageId, line_user_id: userId, tenant_id: linked.tenantId, bill_id: billId,
     storage_path: path, qr_text: qrText, qr_ref: ref };
   const first = await db.from('payment_slips').insert({ ...row, slip_ref: ref });
-  if (!first.error) return SLIP_REPLY.received;
+  if (!first.error) return R.received;
   if (first.error.code !== '23505') throw first.error;
-  if (first.error.message.includes('line_message_id')) return SLIP_REPLY.received;   // LINE delivered the same image twice
+  if (first.error.message.includes('line_message_id')) return R.received;   // LINE delivered the same image twice
 
   // Same QR reference as an earlier slip: keep it, flagged as a duplicate of that one.
   const { data: orig } = await db.from('payment_slips').select('id').eq('slip_ref', ref!).maybeSingle();
   const dup = await db.from('payment_slips').insert({ ...row, slip_ref: null, duplicate_of: orig?.id ?? null });
   if (dup.error && dup.error.code !== '23505') throw dup.error;
-  return SLIP_REPLY.duplicate;
+  return R.duplicate;
 }
+

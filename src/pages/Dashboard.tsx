@@ -1,19 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { loadDashboard } from '../lib/api';
+import { loadDashboard, loadDashboardExtras } from '../lib/api';
 import { dashboardNumbers, defaultDashMonth } from '../lib/dashboard';
 import { currentMonth, fromMonthInput, toMonthInput } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState } from '../components/common';
-import { IconAlert, RoomStatusIcon } from '../components/icons';
+import { IconAlert, IconCalendar, IconWrench, RoomStatusIcon } from '../components/icons';
+import { LineChats } from '../components/LineChats';
 import { Field, PageHead, Panel, PanelTitle, Stat, Stats } from '../components/ui';
 
 const pct = (x: number) => Math.round(x * 1000) / 10;
 
 export default function Dashboard() {
   const { t, money, date, month: monthName } = useI18n();
-  const { data, error, loading, reload } = useLoad(loadDashboard, []);
+  const { data, error, loading, reload } = useLoad(async () => {
+    const [main, extras] = await Promise.all([loadDashboard(), loadDashboardExtras()]);
+    return { ...main, extras };
+  }, []);
   const [picked, setPicked] = useState<string | null>(null);
   const month = picked ?? (data ? defaultDashMonth(data.bills, currentMonth()) : currentMonth());
   const n = useMemo(() => (data ? dashboardNumbers(data.rooms, data.bills, month) : null), [data, month]);
@@ -26,7 +30,7 @@ export default function Dashboard() {
         </Field>
       </PageHead>
       <LoadState loading={loading && !data} error={error} onRetry={reload}>
-        {n && (
+        {n && data && (
           <>
             <Stats>
               <Stat label={t('dash.occupancy')} value={`${pct(n.occupancy)}%`}
@@ -44,6 +48,27 @@ export default function Dashboard() {
                 <div className="h-full bg-sage" style={{ width: `${Math.min(100, pct(n.collectRate))}%` }} />
               </div>
             )}
+
+            <LineChats />
+
+            <div className="grid grid-cols-2 gap-3 mb-[22px]">
+              <Link to="/maintenance" className="flex items-center gap-3 border border-line rounded p-4 bg-paper-raised no-underline text-ink hover:border-teal">
+                <IconWrench size={28} className={data.extras.urgentTickets > 0 ? 'text-terracotta' : 'text-amber'} />
+                <div>
+                  <div className="font-display text-2xl font-semibold tabular-nums">{data.extras.openTickets}</div>
+                  <div className="text-[12.5px] text-muted">{t('dash.open_tickets')}
+                    {data.extras.urgentTickets > 0 && <span className="text-terracotta font-semibold"> · {t('dash.open_tickets_foot', { u: data.extras.urgentTickets })}</span>}
+                  </div>
+                </div>
+              </Link>
+              <Link to="/reservations" className="flex items-center gap-3 border border-line rounded p-4 bg-paper-raised no-underline text-ink hover:border-teal">
+                <IconCalendar size={28} className="text-teal" />
+                <div>
+                  <div className="font-display text-2xl font-semibold tabular-nums">{data.extras.pendingReservations + data.extras.confirmedReservations}</div>
+                  <div className="text-[12.5px] text-muted">{t('dash.reservations')} · {t('dash.reservations_foot', { p: data.extras.pendingReservations, c: data.extras.confirmedReservations })}</div>
+                </div>
+              </Link>
+            </div>
 
             <Panel>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">

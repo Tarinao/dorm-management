@@ -15,6 +15,9 @@ import Dashboard from './pages/Dashboard';
 import Payments from './pages/Payments';
 import Receipt from './pages/Receipt';
 import Guide from './pages/Guide';
+import Reservations from './pages/Reservations';
+import BookingReceipt from './pages/BookingReceipt';
+import Maintenance from './pages/Maintenance';
 
 /** Staff who type /settings are sent back; the database refuses their writes anyway. */
 function AdminOnly({ children }: { children: ReactNode }) {
@@ -54,6 +57,9 @@ export default function App() {
         <Route path="billing" element={<Billing />} />
         <Route path="payments" element={<Payments />} />
         <Route path="receipts/:id" element={<Receipt />} />
+        <Route path="reservations" element={<Reservations />} />
+        <Route path="reservations/:id/receipt" element={<BookingReceipt />} />
+        <Route path="maintenance" element={<Maintenance />} />
         <Route path="guide" element={<Guide />} />
         <Route path="settings" element={<AdminOnly><Settings /></AdminOnly>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

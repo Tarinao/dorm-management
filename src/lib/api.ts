@@ -16,7 +16,17 @@ export type Payment = Tables<'payments'>;
 export type BillSummary = Views<'bill_summary'>;
 export type LineRequest = Tables<'line_link_requests'>;
 export type ContractWithTenant = Contract & { tenants: Tenant | null };
-export type RoomWithCurrent = Room & { current: ContractWithTenant | null };
+export type Reservation = Tables<'reservations'>;
+export type ReservationWithRoom = Reservation & { rooms: { number: string } | null };
+export type Ticket = Tables<'maintenance_tickets'>;
+export type TicketWithRoom = Ticket & { rooms: { number: string } | null };
+export type LineUser = Tables<'line_users'>;
+export type LineInfo = Tables<'line_info'>;
+export type RoomWithCurrent = Room & {
+  current: ContractWithTenant | null;
+  reservation: Reservation | null;          // the pending / confirmed booking on this room, if any
+  openTickets: number;                      // maintenance tickets still open
+};
 
 function must<T>(res: { data: T; error: unknown }): T {
   if (res.error) throw res.error;
@@ -44,30 +54,43 @@ export async function updateSettings(patch: SettingsPatch) {
 
 /* ------------------------------------------------------------------ rooms & tenants */
 export async function listRooms(): Promise<RoomWithCurrent[]> {
-  const rows = must(await sb.from('rooms')
-    .select('*, contracts(*, tenants(*))')
-    .eq('contracts.status', 'active'));
+  const [rows, reservations, tickets] = await Promise.all([
+    sb.from('rooms').select('*, contracts(*, tenants(*))').eq('contracts.status', 'active').then(must),
+    sb.from('reservations').select('*').in('status', ['pending', 'confirmed']).not('room_id', 'is', null).then(must),
+    sb.from('maintenance_tickets').select('room_id').in('status', ['open', 'in_progress']).then(must),
+  ]);
   return (rows ?? [])
-    .map(({ contracts, ...room }) => ({ ...room, current: (contracts?.[0] as ContractWithTenant | undefined) ?? null }))
+    .map(({ contracts, ...room }) => ({
+      ...room,
+      current: (contracts?.[0] as ContractWithTenant | undefined) ?? null,
+      reservation: (reservations ?? []).find((r) => r.room_id === room.id) ?? null,
+      openTickets: (tickets ?? []).filter((t) => t.room_id === room.id).length,
+    }))
     .sort((a, b) => byRoomNumber(a.number, b.number));
 }
 
 export async function getRoom(number: string) {
   const room = must(await sb.from('rooms').select('*').eq('number', number).maybeSingle());
   if (!room) return null;
-  const [contracts, readings, settings] = await Promise.all([
+  const [contracts, readings, settings, reservations, tickets] = await Promise.all([
     sb.from('contracts').select('*, tenants(*)').eq('room_id', room.id).order('start_date', { ascending: false }),
     sb.from('meter_readings').select('*').eq('room_id', room.id).order('read_on', { ascending: false })
       .order('created_at', { ascending: false }).limit(8),
     getSettings(),
+    sb.from('reservations').select('*').eq('room_id', room.id).order('created_at', { ascending: false }).limit(20),
+    sb.from('maintenance_tickets').select('*').eq('room_id', room.id).order('opened_at', { ascending: false }).limit(50),
   ]);
   const all = (must(contracts) ?? []) as ContractWithTenant[];
+  const res = must(reservations) ?? [];
   return {
     room,
     current: all.find((c) => c.status === 'active') ?? null,
     past: all.filter((c) => c.status !== 'active'),
     readings: must(readings) ?? [],
     settings,
+    reservation: res.find((r) => r.status === 'pending' || r.status === 'confirmed') ?? null,
+    pastReservations: res.filter((r) => r.status !== 'pending' && r.status !== 'confirmed'),
+    tickets: must(tickets) ?? [],
   };
 }
 
@@ -95,6 +118,7 @@ export interface MoveInInput {
   startDate: string; endDate: string | null; monthlyRent: number; deposit: number;
   electric: number;
   waterPerPerson: number; occupants: number;
+  reservationId?: string | null;   // "Convert to move-in": marks the booking moved in, credits its fee
 }
 
 export async function moveIn(x: MoveInInput): Promise<string> {
@@ -106,6 +130,7 @@ export async function moveIn(x: MoveInInput): Promise<string> {
     p_monthly_rent: x.monthlyRent, p_deposit: x.deposit,
     p_water: null, p_electric: x.electric,
     p_water_per_person: x.waterPerPerson, p_occupants: x.occupants,
+    ...(x.reservationId ? { p_reservation_id: x.reservationId } : {}),
   }));
 }
 
@@ -345,9 +370,14 @@ export async function lastSendRun(): Promise<SendRun | null> {
 
 /** LINE accounts the owner can choose for the monthly summary: anyone who has messaged the OA. */
 export async function knownLineAccounts(): Promise<{ line_user_id: string; name: string }[]> {
-  const rows = must(await sb.from('line_link_requests').select('line_user_id, line_display_name, created_at').order('created_at', { ascending: false })) ?? [];
+  const [rows, users] = await Promise.all([
+    sb.from('line_link_requests').select('line_user_id, line_display_name, created_at').order('created_at', { ascending: false }).then(must),
+    // Everyone who has talked to the bot (line_users, migration 0013).
+    sb.from('line_users').select('line_user_id, display_name').order('last_seen', { ascending: false }).then((r) => r.data ?? []),
+  ]);
   const seen = new Map<string, string>();
-  for (const r of rows) if (!seen.has(r.line_user_id)) seen.set(r.line_user_id, r.line_display_name || r.line_user_id.slice(0, 8));
+  for (const r of rows ?? []) if (!seen.has(r.line_user_id)) seen.set(r.line_user_id, r.line_display_name || r.line_user_id.slice(0, 8));
+  for (const u of users) if (!seen.has(u.line_user_id)) seen.set(u.line_user_id, u.display_name || u.line_user_id.slice(0, 8));
   return [...seen].map(([line_user_id, name]) => ({ line_user_id, name }));
 }
 
@@ -391,4 +421,170 @@ export async function rejectSlip(slipId: string, userId: string | undefined) {
   must(await sb.from('payment_slips')
     .update({ status: 'rejected', checked_at: new Date().toISOString(), checked_by: userId ?? null })
     .eq('id', slipId).eq('status', 'pending').select('id'));
+}
+
+/* ------------------------------------------------------------------ reservations (0012) */
+export type ReservationFilter = 'active' | 'pending' | 'confirmed' | 'closed' | 'all';
+
+/** Bookings, soonest move-in first. 'active' = pending + confirmed. */
+export async function listReservations(filter: ReservationFilter): Promise<ReservationWithRoom[]> {
+  let q = sb.from('reservations').select('*, rooms(number)');
+  if (filter === 'active') q = q.in('status', ['pending', 'confirmed']);
+  else if (filter === 'closed') q = q.in('status', ['cancelled', 'expired', 'moved_in']);
+  else if (filter !== 'all') q = q.eq('status', filter);
+  const rows = must(await q.order('desired_move_in', { ascending: filter !== 'closed' }).limit(500)) ?? [];
+  return rows as ReservationWithRoom[];
+}
+
+export async function getReservation(id: string): Promise<ReservationWithRoom | null> {
+  return (must(await sb.from('reservations').select('*, rooms(number)').eq('id', id).maybeSingle()) as ReservationWithRoom | null);
+}
+
+export type ReservationInput = Pick<Reservation,
+  'room_id' | 'guest_name' | 'phone' | 'desired_move_in' | 'expires_on' | 'booking_fee' | 'booking_fee_paid_on' | 'booking_fee_method' | 'note'>;
+
+/** New booking (pending, or confirmed straight away) or an edit. The database checks the room
+ *  rules and the one-booking-per-room rule. */
+export async function saveReservation(id: string | null, x: ReservationInput, confirmNow = false): Promise<Reservation> {
+  const row = { ...x, guest_name: x.guest_name.trim(), phone: x.phone.trim(), note: x.note.trim() };
+  if (id) return mustOne(await sb.from('reservations').update(row).eq('id', id).select('*').single());
+  return mustOne(await sb.from('reservations').insert({ ...row, status: confirmNow ? 'confirmed' : 'pending' }).select('*').single());
+}
+
+export async function setReservationStatus(id: string, status: 'confirmed' | 'cancelled') {
+  must(await sb.from('reservations').update({ status }).eq('id', id).select('id').single());
+}
+
+/** Admin only (RLS). Returns false when nothing was deleted. */
+export async function deleteReservation(id: string): Promise<boolean> {
+  const rows = must(await sb.from('reservations').delete().eq('id', id).select('id'));
+  return (rows?.length ?? 0) > 0;
+}
+
+/** What the reservation rules need (see lib/reservations.ts): every room with its status, active
+ *  contracts (move-out date), active bookings and open tickets. */
+export async function reservationRulesData() {
+  const [rooms, contracts, reservations, tickets] = await Promise.all([
+    sb.from('rooms').select('id, number, status, default_rent').then(must),
+    sb.from('contracts').select('room_id, status, end_date').eq('status', 'active').then(must),
+    sb.from('reservations').select('id, room_id, status').in('status', ['pending', 'confirmed']).then(must),
+    sb.from('maintenance_tickets').select('room_id, status, block_room').in('status', ['open', 'in_progress']).then(must),
+  ]);
+  return {
+    rooms: (rooms ?? []).sort((a, b) => byRoomNumber(a.number, b.number)),
+    contracts: contracts ?? [], reservations: reservations ?? [], tickets: tickets ?? [],
+  };
+}
+
+/** A printed booking-fee receipt. */
+export async function getBookingReceipt(id: string) {
+  const [r, settings] = await Promise.all([getReservation(id), getSettings()]);
+  return r && r.booking_receipt_no ? { reservation: r, settings } : null;
+}
+
+/* ------------------------------------------------------------------ maintenance (0012) */
+export type TicketFilter = 'open' | 'closed' | 'all';
+
+export async function listTickets(filter: TicketFilter, roomId?: string): Promise<TicketWithRoom[]> {
+  let q = sb.from('maintenance_tickets').select('*, rooms(number)');
+  if (roomId) q = q.eq('room_id', roomId);
+  if (filter === 'open') q = q.in('status', ['open', 'in_progress']);
+  if (filter === 'closed') q = q.in('status', ['done', 'cancelled']);
+  return (must(await q.order('opened_at', { ascending: false }).limit(500)) ?? []) as TicketWithRoom[];
+}
+
+export type TicketInput = Pick<Ticket,
+  'room_id' | 'title' | 'description' | 'category' | 'priority' | 'status' | 'reported_by' | 'block_room' | 'cost' | 'assigned_to'>;
+
+export async function saveTicket(id: string | null, x: TicketInput): Promise<Ticket> {
+  const row = { ...x, title: x.title.trim(), description: x.description.trim(), assigned_to: x.assigned_to.trim() };
+  if (id) {
+    const { room_id: _fixed, ...patch } = row;   // a ticket stays on its room
+    return mustOne(await sb.from('maintenance_tickets').update(patch).eq('id', id).select('*').single());
+  }
+  return mustOne(await sb.from('maintenance_tickets').insert(row).select('*').single());
+}
+
+export async function setTicketStatus(id: string, status: 'open' | 'in_progress' | 'done' | 'cancelled') {
+  must(await sb.from('maintenance_tickets').update({ status }).eq('id', id).select('id').single());
+}
+
+/** Admin only (RLS). */
+export async function deleteTicket(id: string): Promise<boolean> {
+  const rows = must(await sb.from('maintenance_tickets').delete().eq('id', id).select('id'));
+  return (rows?.length ?? 0) > 0;
+}
+
+/** Upload a photo into the private "maintenance" bucket and add it to the ticket. */
+export async function addTicketPhoto(ticket: Ticket, file: File): Promise<Ticket> {
+  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  const path = `${ticket.id}/${crypto.randomUUID()}.${ext}`;
+  const up = await sb.storage.from('maintenance').upload(path, file, { contentType: file.type || 'image/jpeg' });
+  if (up.error) throw up.error;
+  return mustOne(await sb.from('maintenance_tickets').update({ photos: [...ticket.photos, path] }).eq('id', ticket.id).select('*').single());
+}
+
+/** Remove a photo from the ticket. Only an admin may delete the file itself (RLS); for staff the
+ *  file simply stays in the private bucket, no longer shown. */
+export async function removeTicketPhoto(ticket: Ticket, path: string): Promise<Ticket> {
+  const t = mustOne(await sb.from('maintenance_tickets').update({ photos: ticket.photos.filter((p) => p !== path) }).eq('id', ticket.id).select('*').single());
+  await sb.storage.from('maintenance').remove([path]);
+  return t;
+}
+
+/** Signed links (1 hour) for ticket photos. */
+export async function ticketPhotoUrls(paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const { data } = await sb.storage.from('maintenance').createSignedUrls(paths, 3600);
+  const out = new Map<string, string>();
+  for (const u of data ?? []) if (u.path && u.signedUrl) out.set(u.path, u.signedUrl);
+  return out;
+}
+
+/* ------------------------------------------------------------------ LINE chats & dorm info (0013) */
+export type WantsToTalk = LineUser & { room: string | null; tenant: { full_name: string; nickname: string } | null };
+
+/** People who tapped "Contact staff" and are waiting for an answer, oldest first. */
+export async function listWantsToTalk(): Promise<WantsToTalk[]> {
+  const users = must(await sb.from('line_users').select('*').not('wants_talk_at', 'is', null).order('wants_talk_at')) ?? [];
+  if (users.length === 0) return [];
+  const tenants = must(await sb.from('tenants').select('full_name, nickname, line_user_id, contracts(status, rooms(number))')
+    .in('line_user_id', users.map((u) => u.line_user_id))) ?? [];
+  return users.map((u) => {
+    const tn = tenants.find((x) => x.line_user_id === u.line_user_id);
+    const contracts = (tn?.contracts ?? []) as unknown as { status: string; rooms: { number: string } | null }[];
+    const active = contracts.find((c) => c.status === 'active');
+    return { ...u, room: active?.rooms?.number ?? null, tenant: tn ? { full_name: tn.full_name, nickname: tn.nickname } : null };
+  });
+}
+
+/** "Done": the chat is handled. botBack = the bot may answer this person again right away. */
+export async function lineChatDone(lineUserId: string, botBack: boolean) {
+  must(await sb.rpc('line_chat_done', { p_line_user_id: lineUserId, p_bot_back: botBack }));
+}
+
+export async function getLineInfo(): Promise<LineInfo[]> {
+  return must(await sb.from('line_info').select('*')) ?? [];
+}
+
+/** Admin only (RLS). */
+export async function saveLineInfo(rows: { key: string; text_th: string; text_en: string }[]) {
+  for (const r of rows) {
+    const done = must(await sb.from('line_info').update({ text_th: r.text_th.trim(), text_en: r.text_en.trim() }).eq('key', r.key).select('key'));
+    if (!done || done.length === 0) throw { code: '42501', message: 'permission denied' };
+  }
+}
+
+/* ------------------------------------------------------------------ dashboard extras */
+export async function loadDashboardExtras() {
+  const [tickets, reservations] = await Promise.all([
+    sb.from('maintenance_tickets').select('id, priority').in('status', ['open', 'in_progress']).then(must),
+    sb.from('reservations').select('id, status').in('status', ['pending', 'confirmed']).then(must),
+  ]);
+  return {
+    openTickets: tickets?.length ?? 0,
+    urgentTickets: (tickets ?? []).filter((x) => x.priority === 'urgent').length,
+    pendingReservations: (reservations ?? []).filter((x) => x.status === 'pending').length,
+    confirmedReservations: (reservations ?? []).filter((x) => x.status === 'confirmed').length,
+  };
 }

@@ -43,6 +43,17 @@ const PILL: Record<string, string> = {
   partial: 'bg-teal-soft text-teal',
   unpaid: 'bg-amber-soft text-amber',
   overdue: 'bg-terracotta-soft text-terracotta',
+  // reservations (0012)
+  pending: 'bg-amber-soft text-amber',
+  confirmed: 'bg-teal-soft text-teal',
+  cancelled: 'bg-line text-ink-soft',
+  expired: 'bg-line text-ink-soft',
+  moved_in: 'bg-sage-soft text-sage',
+  // maintenance tickets (0012)
+  open: 'bg-amber-soft text-amber',
+  in_progress: 'bg-teal-soft text-teal',
+  done: 'bg-sage-soft text-sage',
+  urgent: 'bg-terracotta-soft text-terracotta',
 };
 export function Pill({ status, children, className = '' }: { status: string; children: ReactNode; className?: string }) {
   return <span className={cx('inline-block px-[10px] py-[3px] rounded-[20px] text-[11.5px] font-semibold', PILL[status], className)}>{children}</span>;

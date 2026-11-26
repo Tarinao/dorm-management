@@ -7,12 +7,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.functions.json",
     "test:billing": "node scripts/test-billing.ts",
     "test:guide": "node scripts/test-guide.ts",
     "import:old": "node --env-file-if-exists=.env scripts/import-old-data.ts",
     "test:line": "node scripts/test-line.ts",
-    "test:promptpay": "node scripts/test-promptpay.ts"
+    "test:promptpay": "node scripts/test-promptpay.ts",
+    "test:bot": "node scripts/test-bot.ts",
+    "test:reservations": "node scripts/test-reservations.ts",
+    "test": "npm run test:billing && npm run test:guide && npm run test:line && npm run test:promptpay && npm run test:bot && npm run test:reservations",
+    "richmenu:png": "node scripts/line-rich-menu.ts",
+    "richmenu:create": "node scripts/line-rich-menu.ts --create"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",

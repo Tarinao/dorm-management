@@ -108,6 +108,19 @@ export const IconAlert = (p: IconProps) => (
   <Svg {...p}><path d="M12 3 2 20h20z" /><path d="M12 10v4" /><circle cx="12" cy="17" r="0.6" fill="currentColor" /></Svg>
 );
 
+export const IconCalendar = (p: IconProps) => (
+  <Svg {...p}><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /><path d="m9 15 2 2 4-4" /></Svg>
+);
+export const IconWrench = (p: IconProps) => (
+  <Svg {...p}><path d="M20.5 7.2a4.6 4.6 0 0 1-6.1 5.6l-6.6 6.6a2 2 0 0 1-2.9-2.9l6.6-6.6a4.6 4.6 0 0 1 5.6-6.1l-2.8 2.8.5 2.3 2.3.5z" /></Svg>
+);
+export const IconChat = (p: IconProps) => (
+  <Svg {...p}><path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" /><path d="M8 9.5h8M8 12.5h5" /></Svg>
+);
+export const IconCamera = (p: IconProps) => (
+  <Svg {...p}><path d="M4 8h3l1.8-2.5h6.4L17 8h3v11H4z" /><circle cx="12" cy="13.3" r="3.3" /></Svg>
+);
+
 /** App logo: a key in a rounded square. */
 export const Logo = (p: IconProps) => (
   <Svg {...p}><rect x="2.5" y="2.5" width="19" height="19" rx="5" /><circle cx="9" cy="12" r="2.6" /><path d="M11.6 12H17.5v2.4M15 12v1.8" /></Svg>

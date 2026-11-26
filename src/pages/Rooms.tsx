@@ -5,7 +5,7 @@ import { useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, StatusPill } from '../components/common';
 import { RoomStatusIcon } from '../components/icons';
-import { Empty, PageHead } from '../components/ui';
+import { Empty, PageHead, Pill } from '../components/ui';
 import { LineRequests } from '../components/LineRequests';
 import { tenantShort } from '../lib/format';
 
@@ -70,6 +70,20 @@ export default function Rooms() {
                         {money(r.current?.monthly_rent ?? r.default_rent)}
                         {r.current?.end_date ? ` · ${t('rooms.until', { date: date(r.current.end_date) })}` : ''}
                       </div>
+                      {(r.reservation || r.openTickets > 0) && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {r.reservation && (
+                            <Pill status={r.reservation.status === 'confirmed' ? 'reserved' : 'pending'} className="!text-[11px] !px-2 !py-0.5">
+                              {r.reservation.status === 'confirmed'
+                                ? t('rooms.badge_booked', { date: date(r.reservation.desired_move_in) })
+                                : t('rooms.badge_pending')}
+                            </Pill>
+                          )}
+                          {r.openTickets > 0 && (
+                            <Pill status="maintenance" className="!text-[11px] !px-2 !py-0.5">{t('rooms.badge_repairs', { n: r.openTickets })}</Pill>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Link>

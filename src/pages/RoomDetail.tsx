@@ -1,9 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import {
   getRoom, listBills, listPayments, moveIn, moveOut, setNicknameForContract, unlinkLine, updateContract, updateRoom, updateTenant,
-  type BillRow, type ContractWithTenant, type Room, type Settings,
+  type BillRow, type ContractWithTenant, type Reservation, type Room, type Settings, type Ticket,
 } from '../lib/api';
+import { ReservationCard, ReserveButton } from '../components/Reservations';
+import { TicketCard, TicketDialog } from '../components/Tickets';
+import { depositDue, ticketOrder } from '../lib/reservations';
 import { useAuth } from '../lib/auth';
 import { PaymentDialog } from '../components/Payments';
 import { RoomPricesEditor } from '../components/RoomPrices';
@@ -22,6 +25,11 @@ export default function RoomDetail() {
   const { t, money, date } = useI18n();
   const { data, error, loading, reload } = useLoad(() => getRoom(number), [number]);
   const [dialog, setDialog] = useState<'in' | 'out' | null>(null);
+  // "Convert to move-in" opens this page with ?movein=<reservation id>: the move-in form, prefilled.
+  const [params, setParams] = useSearchParams();
+  const convertId = params.get('movein');
+  const converting = data && convertId && data.reservation?.id === convertId && !data.current ? data.reservation : null;
+  const closeConvert = () => { params.delete('movein'); setParams(params, { replace: true }); };
   // After a move-out of a tenant who was linked to LINE: remind staff to tidy the chat in LINE OA Manager.
   const [lineReminder, setLineReminder] = useState<{ label: string; name: string } | null>(null);
 
@@ -34,6 +42,7 @@ export default function RoomDetail() {
       <LoadState loading={loading && !data} error={error} onRetry={reload}>
         {data === null ? <Empty>{t('room.not_found')}</Empty> : data && (
           <>
+            {convertId && data.current && <AlertBar kind="warn">{t('err.room_busy')}</AlertBar>}
             <Panel>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <PanelTitle className="m-0">{t('room.current')}</PanelTitle>
@@ -46,6 +55,8 @@ export default function RoomDetail() {
                 : <Desc className="m-0">{t('room.no_current')}</Desc>}
             </Panel>
 
+            <ReservationPanel room={data.room} reservation={data.reservation} past={data.pastReservations} onChanged={reload} />
+
             <Panel>
               <PanelTitle>{t('price.title')}</PanelTitle>
               <Desc>{t('price.hint')}</Desc>
@@ -54,6 +65,8 @@ export default function RoomDetail() {
             </Panel>
 
             <RoomBills roomId={data.room.id} />
+
+            <TicketsPanel roomId={data.room.id} tickets={data.tickets} onChanged={reload} />
 
             <RoomForm key={data.room.id + data.room.status} room={data.room} hasTenant={!!data.current} onSaved={reload} />
 
@@ -95,6 +108,10 @@ export default function RoomDetail() {
 
             {dialog === 'in' && (
               <MoveInDialog room={data.room} settings={data.settings} onClose={() => setDialog(null)} onDone={() => { setDialog(null); void reload(); }} />
+            )}
+            {converting && (
+              <MoveInDialog key={converting.id} room={data.room} settings={data.settings} reservation={converting}
+                onClose={closeConvert} onDone={() => { closeConvert(); void reload(); }} />
             )}
             {dialog === 'out' && data.current && (
               <MoveOutDialog room={data.room} contract={data.current} lastReading={data.readings[0] ?? null}
@@ -148,7 +165,7 @@ function RoomBills({ roomId }: { roomId: string }) {
 
 /* ------------------------------------------------------------------ current tenant + contract (editable) */
 function CurrentTenant({ roomNumber, contract, onSaved }: { roomNumber: string; contract: ContractWithTenant; onSaved: () => void }) {
-  const { t, date } = useI18n();
+  const { t, date, money } = useI18n();
   const { toast, confirm } = useFeedback();
   const [busy, setBusy] = useState(false);
   const tenant = contract.tenants;
@@ -203,14 +220,16 @@ function CurrentTenant({ roomNumber, contract, onSaved }: { roomNumber: string; 
       <FormGrid>
         <Field label={t('f.start_date')}><input value={date(contract.start_date)} disabled readOnly /></Field>
         <Field label={t('f.end_date')} hint={t('f.end_date_hint')}><input name="end_date" type="date" defaultValue={contract.end_date ?? ''} min={contract.start_date} /></Field>
-        <Field label={t('f.deposit')}><NumInput name="deposit" required defaultValue={contract.deposit} /></Field>
+        <Field label={t('f.deposit')} hint={Number(contract.booking_fee_credit) > 0 ? t('contract.fee_credit', { amount: money(contract.booking_fee_credit) }) : undefined}>
+          <NumInput name="deposit" required defaultValue={contract.deposit} />
+        </Field>
       </FormGrid>
       <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('common.save')}</Btn>
     </form>
   );
 }
 
-function TenantFields({ tenant }: { tenant?: { full_name: string; nickname: string; phone: string; id_card_ref: string; emergency_name: string; emergency_phone: string } | null }) {
+function TenantFields({ tenant }: { tenant?: Partial<{ full_name: string; nickname: string; phone: string; id_card_ref: string; emergency_name: string; emergency_phone: string }> | null }) {
   const { t } = useI18n();
   return (
     <FormGrid>
@@ -266,8 +285,13 @@ function RoomForm({ room, hasTenant, onSaved }: { room: Room; hasTenant: boolean
 }
 
 /* ------------------------------------------------------------------ move in */
-function MoveInDialog({ room, settings, onClose, onDone }: { room: Room; settings: Settings; onClose: () => void; onDone: () => void }) {
+function MoveInDialog({ room, settings, reservation = null, onClose, onDone }: {
+  room: Room; settings: Settings; reservation?: Reservation | null; onClose: () => void; onDone: () => void;
+}) {
   const { t, money } = useI18n();
+  // A paid booking fee counts toward the deposit (the database credits it on the contract).
+  const credit = reservation?.booking_fee_paid_on ? Number(reservation.booking_fee) : 0;
+  const [depositText, setDepositText] = useState(credit > 0 ? String(credit) : '0');
   const { isAdmin } = useAuth();
   // Staff check in at the room's own prices (the database enforces the same rule).
   const roomWater = String(Number(room.water_per_person));
@@ -294,6 +318,7 @@ function MoveInDialog({ room, settings, onClose, onDone }: { room: Room; setting
         roomId: room.id, fullName: s('full_name'), phone: s('phone'), idCardRef: s('id_card_ref'),
         emergencyName: s('emergency_name'), emergencyPhone: s('emergency_phone'),
         startDate: start, endDate: end, monthlyRent: rent, deposit, electric, waterPerPerson, occupants,
+        reservationId: reservation?.id ?? null,
       });
       if (s('nickname')) await setNicknameForContract(contractId, s('nickname'));
       toast(t('movein.done', { n: room.number }));
@@ -306,19 +331,23 @@ function MoveInDialog({ room, settings, onClose, onDone }: { room: Room; setting
       <ModalClose onClick={onClose} />
       <h2 className="text-xl mt-0">{t('movein.title', { n: room.number })}</h2>
       {room.status === 'maintenance' && <AlertBar kind="warn">{t('movein.maintenance_warn')}</AlertBar>}
+      {reservation && <AlertBar kind="info">{t('movein.from_reservation', { name: reservation.guest_name })}</AlertBar>}
       <form onSubmit={submit}>
         <PanelTitle className="mt-3 mb-2">{t('movein.step_tenant')}</PanelTitle>
-        <TenantFields />
+        <TenantFields tenant={reservation ? { full_name: reservation.guest_name, phone: reservation.phone } : null} />
         <PanelTitle className="mt-1 mb-2">{t('movein.step_contract')}</PanelTitle>
         <FormGrid>
-          <Field label={t('f.start_date')}><input name="start_date" type="date" required defaultValue={todayISO()} /></Field>
+          <Field label={t('f.start_date')}><input name="start_date" type="date" required defaultValue={reservation?.desired_move_in ?? todayISO()} /></Field>
           <Field label={t('f.end_date')} hint={t('f.end_date_hint')}><input name="end_date" type="date" /></Field>
           <Field label={t('f.monthly_rent')}>
             {isAdmin
               ? <NumInput name="monthly_rent" required defaultValue={room.default_rent} />
               : <><input value={money(room.default_rent)} disabled readOnly /><input type="hidden" name="monthly_rent" value={room.default_rent} /></>}
           </Field>
-          <Field label={t('f.deposit')}><NumInput name="deposit" defaultValue="0" /></Field>
+          <Field label={t('f.deposit')}
+            hint={credit > 0 ? t('movein.fee_credit', { amount: money(credit), due: money(depositDue(parseNum(depositText) ?? 0, credit)) }) : undefined}>
+            <NumInput name="deposit" value={depositText} onChange={(e) => setDepositText(e.target.value)} />
+          </Field>
           <Field label={t('price.water')}>
             {isAdmin ? (
               <select name="water_per_person" defaultValue={String(Number(settings.water_price_new))}>
@@ -410,5 +439,66 @@ function MoveOutDialog({ room, contract, lastReading, onClose, onDone }: {
         </BtnRow>
       </form>
     </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ reservation of this room */
+function ReservationPanel({ room, reservation, past, onChanged }: {
+  room: Room; reservation: Reservation | null; past: Reservation[]; onChanged: () => void;
+}) {
+  const { t, date } = useI18n();
+  const [showPast, setShowPast] = useState(false);
+  return (
+    <Panel>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <PanelTitle className="m-0">{t('res.room_title')}</PanelTitle>
+        {!reservation && <ReserveButton key={room.status} roomId={room.id} onSaved={onChanged} />}
+      </div>
+      {reservation
+        ? <ReservationCard r={reservation} roomNumber={room.number} showRoom={false} onChanged={onChanged} />
+        : <Desc className="m-0">{t('res.room_none_active')}</Desc>}
+      {past.length > 0 && (
+        <div className="mt-3">
+          {!showPast
+            ? <Btn small variant="secondary" onClick={() => setShowPast(true)}>{t('res.past')} ({past.length})</Btn>
+            : (
+              <ul className="list-none p-0 m-0 flex flex-col gap-1 text-[13px]">
+                {past.map((r) => (
+                  <li key={r.id} className="flex items-center gap-2 flex-wrap">
+                    <StatusPill status={r.status} />
+                    <span>{r.guest_name}</span>
+                    <span className="text-muted">{t('res.move_in', { date: date(r.desired_move_in) })}</span>
+                    {r.booking_receipt_no && <Link to={`/reservations/${r.id}/receipt`} className="text-teal no-underline">{r.booking_receipt_no}</Link>}
+                  </li>
+                ))}
+              </ul>
+            )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------------------ repairs of this room */
+function TicketsPanel({ roomId, tickets, onChanged }: { roomId: string; tickets: Ticket[]; onChanged: () => void }) {
+  const { t } = useI18n();
+  const [creating, setCreating] = useState(false);
+  const [all, setAll] = useState(false);
+  const sorted = [...tickets].sort(ticketOrder);
+  const shown = all ? sorted : sorted.filter((x, i) => i < 3 || x.status === 'open' || x.status === 'in_progress');
+  return (
+    <Panel>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <PanelTitle className="m-0">{t('mt.room_title')}</PanelTitle>
+        <Btn variant="secondary" onClick={() => setCreating(true)}>{t('mt.new')}</Btn>
+      </div>
+      {tickets.length === 0 ? <Desc className="m-0">{t('mt.room_empty')}</Desc> : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {shown.map((x) => <TicketCard key={x.id} ticket={x} showRoom={false} onChanged={onChanged} />)}
+        </div>
+      )}
+      {!all && shown.length < sorted.length && <Btn small variant="secondary" className="mt-3" onClick={() => setAll(true)}>{t('pay.show_older')}</Btn>}
+      {creating && <TicketDialog ticket={null} roomId={roomId} onClose={() => setCreating(false)} onSaved={onChanged} />}
+    </Panel>
   );
 }

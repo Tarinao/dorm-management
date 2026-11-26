@@ -2,7 +2,9 @@
  * then updated for migration 20261123140852_water_per_person.sql (marked "0006"; checked against regenerated types after it was applied)
  * and 20261123151116_no_water_meter.sql (marked "0007": the water reading is optional)
  * and 20261124144201_line_linking.sql (marked "0009", hand-written; applied 2026-11-24)
- * and 20261125093453_line_billing.sql (marked "0010", hand-written).
+ * and 20261125093453_line_billing.sql (marked "0010", hand-written)
+ * and 20261126101653_reservations_maintenance.sql (marked "0012", hand-written)
+ * and 20261126101711_line_bot.sql (marked "0013", hand-written).
  * Hand edits marked "edited": move_in's p_tenant_id and p_end_date accept null
  * (the SQL function handles null; the generator cannot tell).
  * Regenerate after any schema change. */
@@ -21,6 +23,25 @@ type SlipRow = {
   status: string; payment_id: string | null; received_at: string; checked_by: string | null; checked_at: string | null;
 };
 type RunRow = { id: string; kind: string; month: string | null; ran_at: string; ran_by: string | null; summary: Json };
+/* 0012 */
+type ReservationRow = {
+  id: string; room_id: string | null; guest_name: string; phone: string; line_user_id: string | null;
+  desired_move_in: string; booking_fee: number; booking_fee_paid_on: string | null; booking_fee_method: string | null;
+  booking_receipt_no: string | null; status: string; expires_on: string; note: string; source: string;
+  tenant_id: string | null; contract_id: string | null; created_by: string | null; created_at: string; updated_at: string;
+};
+type TicketRow = {
+  id: string; room_id: string; title: string; description: string; category: string; priority: string; status: string;
+  reported_by: string; block_room: boolean; photos: string[]; cost: number | null; assigned_to: string;
+  opened_at: string; closed_at: string | null; created_by: string | null;
+};
+/* 0013 */
+type LineUserRow = {
+  line_user_id: string; display_name: string; picture_url: string; lang: string | null; menu_state: string | null;
+  draft: Json; handover_until: string | null; wants_talk_at: string | null; first_seen: string; last_seen: string;
+};
+type LineInfoRow = { key: string; text_th: string; text_en: string; updated_at: string };
+type BotSettings = { office_phone: string; location_lat: number | null; location_lng: number | null };
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -69,16 +90,19 @@ export type Database = {
           created_at: string; deposit: number; deposit_returned: number | null; end_date: string | null; id: string;
           monthly_rent: number; move_out_note: string; moved_out_on: string | null; room_id: string;
           start_date: string; status: string; tenant_id: string;
+          booking_fee_credit: number; // 0012
         };
         Insert: {
           created_at?: string; deposit?: number; deposit_returned?: number | null; end_date?: string | null; id?: string;
           monthly_rent: number; move_out_note?: string; moved_out_on?: string | null; room_id: string;
           start_date: string; status?: string; tenant_id: string;
+          booking_fee_credit?: number; // 0012
         };
         Update: {
           created_at?: string; deposit?: number; deposit_returned?: number | null; end_date?: string | null; id?: string;
           monthly_rent?: number; move_out_note?: string; moved_out_on?: string | null; room_id?: string;
           start_date?: string; status?: string; tenant_id?: string;
+          booking_fee_credit?: number; // 0012
         };
         Relationships: [
           { foreignKeyName: 'contracts_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
@@ -115,9 +139,9 @@ export type Database = {
         Relationships: [];
       };
       settings: {
-        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number; summary_line_user_id: string | null } & PaySettings; // 0006, 0009, 0010
-        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings>;
-        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings>;
+        Row: { dorm_name: string; due_day: number; electric_rate: number; id: number; updated_at: string; water_price_old: number; water_price_new: number; summary_line_user_id: string | null } & PaySettings & BotSettings; // 0006, 0009, 0010, 0013
+        Insert: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings & BotSettings>;
+        Update: { dorm_name?: string; due_day?: number; electric_rate?: number; id?: number; updated_at?: string; water_price_old?: number; water_price_new?: number; summary_line_user_id?: string | null } & Partial<PaySettings & BotSettings>;
         Relationships: [];
       };
       line_link_requests: { // 0009
@@ -156,6 +180,34 @@ export type Database = {
         Update: Partial<RunRow>;
         Relationships: [];
       };
+      reservations: { // 0012
+        Row: ReservationRow;
+        Insert: Partial<ReservationRow> & { guest_name: string; desired_move_in: string };
+        Update: Partial<ReservationRow>;
+        Relationships: [
+          { foreignKeyName: 'reservations_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
+        ];
+      };
+      maintenance_tickets: { // 0012
+        Row: TicketRow;
+        Insert: Partial<TicketRow> & { room_id: string; title: string };
+        Update: Partial<TicketRow>;
+        Relationships: [
+          { foreignKeyName: 'maintenance_tickets_room_id_fkey'; columns: ['room_id']; isOneToOne: false; referencedRelation: 'rooms'; referencedColumns: ['id'] },
+        ];
+      };
+      line_users: { // 0013
+        Row: LineUserRow;
+        Insert: Partial<LineUserRow> & { line_user_id: string };
+        Update: Partial<LineUserRow>;
+        Relationships: [];
+      };
+      line_info: { // 0013
+        Row: LineInfoRow;
+        Insert: Partial<LineInfoRow> & { key: string };
+        Update: Partial<LineInfoRow>;
+        Relationships: [];
+      };
       tenants: {
         Row: { created_at: string; emergency_name: string; emergency_phone: string; full_name: string; id: string; id_card_ref: string; notes: string; phone: string } & TenantLine; // 0009
         Insert: { created_at?: string; emergency_name?: string; emergency_phone?: string; full_name: string; id?: string; id_card_ref?: string; notes?: string; phone?: string } & Partial<TenantLine>;
@@ -191,6 +243,7 @@ export type Database = {
       confirm_slip: { Args: { p_slip_id: string; p_amount: number; p_paid_on: string; p_note?: string }; Returns: string }; // 0010
       generate_bills: { Args: { p_month: string }; Returns: { new_bill_id: string; outcome: string; room_number: string }[] };
       is_admin: { Args: never; Returns: boolean };
+      line_chat_done: { Args: { p_line_user_id: string; p_bot_back?: boolean }; Returns: undefined }; // 0013
       is_member: { Args: never; Returns: boolean };
       move_in: {
         Args: {
@@ -202,6 +255,7 @@ export type Database = {
           p_water: number | null; // 0007
           p_water_per_person: number | null; // 0006
           p_occupants: number | null; // 0006
+          p_reservation_id?: string | null; // 0012
         };
         Returns: string;
       };

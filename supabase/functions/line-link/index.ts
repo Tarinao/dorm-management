@@ -9,9 +9,10 @@
  * POST { action: 'approve' | 'reject', request_id: uuid }
  *   -> { ok: true, room_number, label, line_display_name, previous_room, pushed, push_error? }
  *   -> { error: 'REQUEST_NOT_PENDING' | 'ROOM_HAS_NO_TENANT' | 'NOT_ALLOWED' | ... } (status 400/403) */
-import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.2';
 import { MSG, tenantLabel } from '../_shared/core.ts';
 import { push, text } from '../_shared/line.ts';
+import { LINK_1, isLang } from '../_shared/lang.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -56,14 +57,25 @@ Deno.serve(async (req) => {
       line_display_name: row.line_display_name ?? '',
       previous_room: row.previous_room,
     };
-    return json({ ...result, ...(await tryPush(token, row.line_user_id!, MSG.linked(room))) });
+    const lang = await chosenLang(db, row.line_user_id!);
+    return json({ ...result, ...(await tryPush(token, row.line_user_id!, lang ? LINK_1[lang].linked(room) : MSG.linked(room))) });
   }
 
   const { data, error } = await db.rpc('reject_line_request', { p_request_id: requestId });
   if (error) return dbError(error);
   const row = (data as Record<string, string>[])[0];
-  return json({ ok: true, room_number: row.room_number_typed, ...(await tryPush(token, row.line_user_id, MSG.rejected(row.room_number_typed))) });
+  const lang = await chosenLang(db, row.line_user_id);
+  const msg = lang ? LINK_1[lang].rejected(row.room_number_typed) : MSG.rejected(row.room_number_typed);
+  return json({ ok: true, room_number: row.room_number_typed, ...(await tryPush(token, row.line_user_id, msg)) });
 });
+
+/** The language the person chose in the LINE bot (line_users, members may read it); null = never
+ *  chose one, so the original bilingual message is sent. */
+async function chosenLang(db: SupabaseClient, lineUserId: string) {
+  const { data } = await db.from('line_users').select('lang').eq('line_user_id', lineUserId).maybeSingle();
+  const lang = (data as { lang?: unknown } | null)?.lang;
+  return isLang(lang) ? lang : null;
+}
 
 /** The link is already saved when this runs; a failed message is reported, not rolled back. */
 async function tryPush(token: string | undefined, to: string, message: string) {

@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { getSettings, knownLineAccounts, listProfiles, setRole, updateSettings, type Profile, type Settings as SettingsRow } from '../lib/api';
+import { getLineInfo, getSettings, knownLineAccounts, listProfiles, saveLineInfo, setRole, updateSettings, type LineInfo, type Profile, type Settings as SettingsRow } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../lib/feedback';
 import { parseNum } from '../lib/format';
-import { friendlyError, useI18n } from '../lib/i18n';
+import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, NumInput } from '../components/common';
 import { Btn, DataTable, Desc, Field, FormGrid, PageHead, Panel, PanelTitle } from '../components/ui';
@@ -12,8 +12,8 @@ import { Btn, DataTable, Desc, Field, FormGrid, PageHead, Panel, PanelTitle } fr
 export default function Settings() {
   const { t } = useI18n();
   const { data, error, loading, reload } = useLoad(async () => {
-    const [settings, profiles, lineAccounts] = await Promise.all([getSettings(), listProfiles(), knownLineAccounts()]);
-    return { settings, profiles, lineAccounts };
+    const [settings, profiles, lineAccounts, lineInfo] = await Promise.all([getSettings(), listProfiles(), knownLineAccounts(), getLineInfo()]);
+    return { settings, profiles, lineAccounts, lineInfo };
   }, []);
 
   return (
@@ -24,6 +24,7 @@ export default function Settings() {
           <>
             <RatesForm key={data.settings.updated_at} s={data.settings} onSaved={reload} />
             <PaymentForm key={'pay' + data.settings.updated_at} s={data.settings} lineAccounts={data.lineAccounts} onSaved={reload} />
+            <LineInfoForm key={'li' + data.settings.updated_at + data.lineInfo.map((x) => x.updated_at).join()} s={data.settings} info={data.lineInfo} onSaved={reload} />
             <StaffList profiles={data.profiles} onSaved={reload} />
           </>
         )}
@@ -186,6 +187,69 @@ function StaffList({ profiles, onSaved }: { profiles: Profile[]; onSaved: () => 
           ))}
         </tbody>
       </DataTable>
+    </Panel>
+  );
+}
+
+/** The line_info rows (same keys as the table's check constraint and INFO_KEYS in _shared/bot.ts). */
+const INFO_KEYS = ['room_types', 'facilities', 'location', 'house_rules', 'deposit_terms'] as const;
+
+/** What the LINE bot answers under "Dorm information", in Thai and English, plus the office
+ *  phone and the map pin. Nothing is hardcoded in the bot: empty = "not available yet". */
+function LineInfoForm({ s, info, onSaved }: { s: SettingsRow; info: LineInfo[]; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const [busy, setBusy] = useState(false);
+  const of = (k: string) => info.find((x) => x.key === k);
+
+  const save = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    const f = new FormData(ev.currentTarget);
+    const v = (k: string) => String(f.get(k) ?? '').trim();
+    // A pasted "13.7563, 100.5018" in the latitude box fills both.
+    let latText = v('location_lat'), lngText = v('location_lng');
+    const pair = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(latText);
+    if (pair) { latText = pair[1]; lngText = pair[2]; }
+    const lat = latText ? Number(latText) : null, lng = lngText ? Number(lngText) : null;
+    if ((lat === null) !== (lng === null) || (lat !== null && (!Number.isFinite(lat) || Math.abs(lat) > 90)) ||
+        (lng !== null && (!Number.isFinite(lng) || Math.abs(lng) > 180))) {
+      toast(t('err.check'), 'error'); return;
+    }
+    setBusy(true);
+    try {
+      await updateSettings({ office_phone: v('office_phone'), location_lat: lat, location_lng: lng });
+      await saveLineInfo(INFO_KEYS.map((k) => ({ key: k, text_th: v(`${k}_th`), text_en: v(`${k}_en`) })));
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Panel>
+      <PanelTitle>{t('li.title')}</PanelTitle>
+      <Desc>{t('li.hint')}</Desc>
+      <form onSubmit={save}>
+        {INFO_KEYS.map((k) => (
+          <fieldset key={k} className="border border-line rounded p-3 mb-4">
+            <legend className="px-1 text-[13.5px] font-semibold">{t(`li.key.${k}` as TKey)}</legend>
+            {k === 'location' && <Desc className="mt-0 mb-2">{t('li.location_hint')}</Desc>}
+            <div className="grid grid-cols-2 max-[640px]:grid-cols-1 gap-3">
+              <Field label={t('li.th')}><textarea name={`${k}_th`} rows={4} maxLength={4500} defaultValue={of(k)?.text_th ?? ''} /></Field>
+              <Field label={t('li.en')}><textarea name={`${k}_en`} rows={4} maxLength={4500} defaultValue={of(k)?.text_en ?? ''} /></Field>
+            </div>
+          </fieldset>
+        ))}
+        <FormGrid>
+          <Field label={t('li.office_phone')} hint={t('li.office_hours_note')}>
+            <input name="office_phone" type="tel" inputMode="tel" maxLength={40} autoComplete="off" defaultValue={s.office_phone} />
+          </Field>
+          <Field label={t('li.lat')} hint={t('li.pin_hint')}>
+            <input name="location_lat" inputMode="decimal" autoComplete="off" defaultValue={s.location_lat ?? ''} />
+          </Field>
+          <Field label={t('li.lng')}><input name="location_lng" inputMode="decimal" autoComplete="off" defaultValue={s.location_lng ?? ''} /></Field>
+        </FormGrid>
+        <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('li.save')}</Btn>
+      </form>
     </Panel>
   );
 }
