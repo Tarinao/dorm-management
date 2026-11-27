@@ -4,6 +4,7 @@ import { useFeedback } from '../lib/feedback';
 import { tenantLabel } from '../lib/format';
 import { friendlyError, useI18n } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
+import { Avatar } from './Avatar';
 import { LoadState } from './common';
 import { IconChat } from './icons';
 import { Btn, BtnRow, Desc, Panel, PanelTitle } from './ui';
@@ -48,9 +49,7 @@ export function LineChats() {
                 return (
                   <li key={u.line_user_id} className="border border-line rounded p-3">
                     <div className="flex items-center gap-3">
-                      {u.picture_url
-                        ? <img src={u.picture_url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
-                        : <span className="w-11 h-11 rounded-full bg-line shrink-0" aria-hidden />}
+                      <Avatar src={u.picture_url} name={u.display_name || '?'} size={44} />
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold truncate">
                           {u.display_name || '—'}

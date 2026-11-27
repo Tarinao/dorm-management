@@ -24,6 +24,24 @@ export type LineUser = Tables<'line_users'>;
 export type Viewing = Tables<'viewings'>;
 export type ViewingWithRoom = Viewing & { rooms: { number: string } | null };
 export type LineInfo = Tables<'line_info'>;
+
+/* ---------------------------------------------------------------- LINE faces */
+export type LineFace = { display_name: string; picture_url: string };
+let facesCache: { at: number; p: Promise<Map<string, LineFace>> } | null = null;
+
+/** LINE name + profile picture of everyone who has talked to the bot, keyed by line_user_id.
+ *  One small query shared by every avatar on the page, kept for a minute. */
+export function lineFaces(): Promise<Map<string, LineFace>> {
+  if (!facesCache || Date.now() - facesCache.at > 60_000) {
+    const p = Promise.resolve(sb.from('line_users').select('line_user_id, display_name, picture_url')).then((r) => {
+      if (r.error) throw r.error;
+      return new Map((r.data ?? []).map((u) => [u.line_user_id, { display_name: u.display_name, picture_url: u.picture_url }]));
+    });
+    p.catch(() => { if (facesCache?.p === p) facesCache = null; });  // retry next time
+    facesCache = { at: Date.now(), p };
+  }
+  return facesCache.p;
+}
 export type RoomWithCurrent = Room & {
   current: ContractWithTenant | null;
   reservation: Reservation | null;          // the pending / confirmed booking on this room, if any

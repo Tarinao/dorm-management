@@ -15,6 +15,7 @@ import { useFeedback } from '../lib/feedback';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { meter, parseNum, tenantLabel, todayISO } from '../lib/format';
 import { useLoad } from '../lib/useLoad';
+import { LineAvatar } from '../components/Avatar';
 import { LoadState, NumInput, StatusPill } from '../components/common';
 import { AlertBar, Btn, BtnRow, DataTable, Desc, Empty, Field, FormGrid, Modal, ModalClose, PageHead, Panel, PanelTitle } from '../components/ui';
 
@@ -210,7 +211,10 @@ function CurrentTenant({ roomNumber, contract, onSaved }: { roomNumber: string; 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3 text-[13.5px]">
         {tenant?.line_user_id
           ? <>
-              <span className="text-sage font-semibold">{t('line.status_linked', { name: tenant.line_display_name || '?' })}</span>
+              <span className="text-sage font-semibold inline-flex items-center gap-2">
+                <LineAvatar lineUserId={tenant.line_user_id} name={tenant.line_display_name || tenant.full_name} size={28} />
+                {t('line.status_linked', { name: tenant.line_display_name || '?' })}
+              </span>
               <Btn small variant="secondary" onClick={() => void unlink()}>{t('line.unlink')}</Btn>
             </>
           : <span className="text-muted">{t('line.status_not_linked', { n: roomNumber })}</span>}

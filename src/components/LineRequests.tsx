@@ -4,6 +4,7 @@ import { useFeedback } from '../lib/feedback';
 import { tenantLabel } from '../lib/format';
 import { friendlyError, useI18n } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
+import { Avatar } from './Avatar';
 import { LoadState } from './common';
 import { AlertBar, Btn, BtnRow, Desc, Modal, ModalClose, Panel, PanelTitle } from './ui';
 
@@ -62,9 +63,7 @@ export function LineRequests({ rooms, onChanged }: { rooms: RoomWithCurrent[]; o
                 return (
                   <li key={req.id} className="border border-line rounded p-3">
                     <div className="flex items-center gap-3">
-                      {req.line_picture_url
-                        ? <img src={req.line_picture_url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
-                        : <span className="w-11 h-11 rounded-full bg-line shrink-0" aria-hidden />}
+                      <Avatar src={req.line_picture_url} name={req.line_display_name || '?'} size={44} />
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold truncate">{req.line_display_name || '—'}</div>
                         <div className="text-[13px] text-ink-soft">

@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
 });
 
 type LineUserRow = BotUser & { line_user_id: string; display_name: string };
+const PROFILE_REFRESH_MS = 6 * 60 * 60 * 1000;   // re-read LINE name + picture at most every 6 hours
 
 async function handleEvent(ev: LineEvent, token: string) {
   const userId = ev.source?.type === 'user' ? ev.source.userId : undefined;
@@ -130,7 +131,7 @@ async function handleEvent(ev: LineEvent, token: string) {
 /** The user's row (created on first contact, with their LINE name), last_seen updated. */
 async function ensureUser(userId: string, token: string): Promise<LineUserRow> {
   const cols = 'line_user_id, display_name, lang, menu_state, draft, handover_until';
-  const { data, error } = await db.from('line_users').select(cols).eq('line_user_id', userId).maybeSingle();
+  const { data, error } = await db.from('line_users').select(`${cols}, picture_url, last_seen`).eq('line_user_id', userId).maybeSingle();
   if (error) throw error;
   let row = data as Record<string, unknown> | null;
   if (!row) {
@@ -141,7 +142,16 @@ async function ensureUser(userId: string, token: string): Promise<LineUserRow> {
     if (ins.error) throw ins.error;
     row = (ins.data as Record<string, unknown> | null) ?? { line_user_id: userId, display_name: profile.displayName };
   } else {
-    const { error: upErr } = await db.from('line_users').update({ last_seen: new Date().toISOString() }).eq('line_user_id', userId);
+    // LINE name / picture can change (and old picture links stop working): refresh them
+    // when not seen for PROFILE_REFRESH_MS, so the app shows the current photo.
+    const patch: Record<string, string> = { last_seen: new Date().toISOString() };
+    const seen = Date.parse(String(row.last_seen ?? ''));
+    if (!row.picture_url || !(seen > Date.now() - PROFILE_REFRESH_MS)) {
+      const profile = await getProfile(token, userId);
+      if (profile.displayName) { patch.display_name = profile.displayName; row.display_name = profile.displayName; }
+      if (profile.pictureUrl) patch.picture_url = profile.pictureUrl;
+    }
+    const { error: upErr } = await db.from('line_users').update(patch).eq('line_user_id', userId);
     if (upErr) console.error('line-webhook: last_seen:', upErr.message);
   }
   return {

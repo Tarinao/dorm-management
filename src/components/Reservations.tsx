@@ -11,6 +11,7 @@ import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { defaultExpiry, isActive, reservationBlocker } from '../lib/reservations';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, NumInput, StatusPill } from './common';
+import { LineAvatar } from './Avatar';
 import { IconReceipt } from './icons';
 import { AlertBar, Btn, BtnRow, Desc, Field, FormGrid, Modal, ModalClose } from './ui';
 
@@ -156,6 +157,8 @@ export function ReservationCard({ r, roomNumber, onChanged, showRoom = true }: {
   return (
     <div className="border border-line rounded p-3 bg-paper-raised">
       <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start gap-3 min-w-0">
+        <LineAvatar lineUserId={r.line_user_id} name={r.guest_name} size={40} />
         <div className="min-w-0">
           <div className="font-semibold">
             {showRoom && (number
@@ -180,6 +183,7 @@ export function ReservationCard({ r, roomNumber, onChanged, showRoom = true }: {
             )}
           </div>
           {r.note && <div className="text-[13px] text-muted mt-0.5 whitespace-pre-line">{r.note}</div>}
+        </div>
         </div>
         <StatusPill status={r.status} />
       </div>

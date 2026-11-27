@@ -10,6 +10,7 @@ import { todayISO } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, StatusPill } from './common';
+import { LineAvatar } from './Avatar';
 import { ReservationDialog } from './Reservations';
 import { AlertBar, Btn, BtnRow, Field, FormGrid, Modal, ModalClose } from './ui';
 
@@ -112,6 +113,8 @@ export function ViewingCard({ v, onChanged }: { v: ViewingWithRoom; onChanged: (
   return (
     <div className={`border rounded p-3 bg-paper-raised ${passed ? 'border-amber' : 'border-line'}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start gap-3 min-w-0">
+        <LineAvatar lineUserId={v.line_user_id} name={v.guest_name} size={40} />
         <div className="min-w-0">
           <div className="font-semibold">
             {v.guest_name}
@@ -127,6 +130,7 @@ export function ViewingCard({ v, onChanged }: { v: ViewingWithRoom; onChanged: (
           {v.reservation_id && (
             <Link to="/reservations" className="inline-block mt-1 text-[13px] text-teal no-underline">{t('vw.reserved')} →</Link>
           )}
+        </div>
         </div>
         <StatusPill status={v.status} />
       </div>

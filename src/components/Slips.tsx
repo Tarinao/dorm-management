@@ -6,6 +6,7 @@ import { useFeedback } from '../lib/feedback';
 import { bangkokDay, parseNum, tenantLabel, todayISO } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
+import { LineAvatar } from './Avatar';
 import { LoadState, NumInput } from './common';
 import { AlertBar, Btn, BtnRow, Desc, Field, FormGrid, Modal, ModalClose, Panel, PanelTitle } from './ui';
 
@@ -67,7 +68,10 @@ function SlipCard({ slip, onConfirm, onChanged }: { slip: Slip; onConfirm: () =>
         </a>
       ) : <span className="w-24 h-36 rounded bg-line shrink-0" aria-hidden />}
       <div className="min-w-0 flex-1 text-[13.5px]">
-        <div className="font-semibold text-[15px]">{room ? tenantLabel(room, slip.tenant) : (slip.tenant?.full_name ?? '—')}</div>
+        <div className="font-semibold text-[15px] flex items-center gap-2">
+          <LineAvatar lineUserId={slip.line_user_id} name={slip.tenant?.full_name ?? '?'} size={28} />
+          <span className="min-w-0">{room ? tenantLabel(room, slip.tenant) : (slip.tenant?.full_name ?? '—')}</span>
+        </div>
         <div className="text-ink-soft">{t('slip.received')}</div>
         <div className="text-muted text-[12.5px]">{t('slip.received_at', { date: date(day), time })}</div>
         {slip.bill
