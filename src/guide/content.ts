@@ -23,7 +23,7 @@ export const GUIDE: readonly GuideSection[] = [
   {
     id: 'meters',
     title: ['Entering meter readings', 'จดมิเตอร์'],
-    intro: ['Once a month, near the end of the month. Only the electric meter is read; water is charged per person.', 'เดือนละครั้ง ช่วงสิ้นเดือน จดเฉพาะมิเตอร์ไฟ ค่าน้ำคิดเป็นรายคน ไม่ต้องจดมิเตอร์น้ำ'],
+    intro: ['Once a month, at the end of the month. A month’s readings go on the next month’s bill (November’s readings → December bill). Only the electric meter is read; water is charged per person.', 'เดือนละครั้ง ตอนสิ้นเดือน เลขมิเตอร์ของเดือนใดจะไปอยู่ในบิลของเดือนถัดไป (มิเตอร์เดือนพฤศจิกายน → บิลเดือนธันวาคม) จดเฉพาะมิเตอร์ไฟ ค่าน้ำคิดเป็นรายคน ไม่ต้องจดมิเตอร์น้ำ'],
     steps: [
       ['Open "Meters".', 'เปิดหน้า "จดมิเตอร์"'],
       ['Check the month and the reading date at the top of the page.', 'ตรวจเดือนและวันที่จดด้านบนของหน้า'],
@@ -37,16 +37,17 @@ export const GUIDE: readonly GuideSection[] = [
   {
     id: 'bills',
     title: ['Generating the monthly bills', 'ออกบิลประจำเดือน'],
-    intro: ['After all meters for the month are saved.', 'ทำหลังจากจดมิเตอร์ครบทุกห้องแล้ว'],
+    intro: ['On the 1st of the month, after last month’s meters are saved. The bill of a month has that month’s rent and common fee (in advance) plus last month’s water and electric.', 'วันที่ 1 ของเดือน หลังจดมิเตอร์ของเดือนก่อนครบแล้ว บิลของเดือนหนึ่งมีค่าเช่าและค่าส่วนกลางของเดือนนั้น (ล่วงหน้า) กับค่าน้ำค่าไฟของเดือนก่อน'],
     steps: [
-      ['Open "Billing" and choose the month.', 'เปิดหน้า "ออกบิล" แล้วเลือกเดือน'],
-      ['Check the preview. Each room shows "Ready" or a reason in red, e.g. "No meter reading this month".', 'ตรวจตัวอย่างบิล แต่ละห้องจะขึ้น "พร้อมออกบิล" หรือเหตุผลสีแดง เช่น "ยังไม่จดมิเตอร์เดือนนี้"'],
+      ['Open "Billing" and choose the bill month (e.g. December for December’s rent and November’s water and electric).', 'เปิดหน้า "ออกบิล" แล้วเลือกเดือนของบิล (เช่น ธันวาคม = ค่าเช่าเดือนธันวาคม กับค่าน้ำค่าไฟเดือนพฤศจิกายน)'],
+      ['Check the preview. Each room shows "Ready" or a reason in red, e.g. "No meter reading for last month". A new tenant’s first bill has rent and common fee only; a tenant who moved out gets a final bill with water and electric only.', 'ตรวจตัวอย่างบิล แต่ละห้องจะขึ้น "พร้อมออกบิล" หรือเหตุผลสีแดง เช่น "ยังไม่จดมิเตอร์ของเดือนก่อน" บิลแรกของผู้เช่าใหม่มีเฉพาะค่าเช่าและค่าส่วนกลาง ผู้ที่ย้ายออกจะได้บิลสุดท้ายที่มีเฉพาะค่าน้ำค่าไฟ'],
       ['Fix the red reasons first (usually: go to "Meters" and save the missing number).', 'แก้เหตุผลสีแดงก่อน (ส่วนใหญ่คือไปหน้า "จดมิเตอร์" แล้วบันทึกเลขที่ขาด)'],
       ['Owner only: change a room’s water price, people or rent here if needed. It is remembered for next month.', 'เฉพาะเจ้าของหอ: เปลี่ยนค่าน้ำ จำนวนคน หรือค่าเช่าของห้องได้ตรงนี้ ระบบจะจำไว้ใช้เดือนถัดไป'],
       ['Tap "Generate N bills" and confirm. Rooms that already have a bill are skipped.', 'แตะ "ออกบิล N ห้อง" แล้วยืนยัน ห้องที่มีบิลแล้วจะถูกข้าม'],
       ['To add a charge (e.g. parking), tap "+ Add charge" on that bill.', 'ถ้ามีค่าใช้จ่ายเพิ่ม (เช่น ค่าจอดรถ) แตะ "+ เพิ่มรายการ" ที่บิลนั้น'],
+      ['Tap "Invoice" on a bill to print it on A4 or save it as PDF.', 'แตะ "ใบแจ้งหนี้" ที่บิล เพื่อพิมพ์บนกระดาษ A4 หรือบันทึกเป็น PDF'],
     ],
-    tip: ['Bills are due on the due day of the following month. A wrong bill can be deleted by the owner (only before any payment) and made again.', 'บิลครบกำหนดตามวันที่ตั้งไว้ของเดือนถัดไป ถ้าบิลผิด เจ้าของหอลบแล้วออกใหม่ได้ (เฉพาะบิลที่ยังไม่มีการชำระ)'],
+    tip: ['Bills are due on the due day of the bill month. The common fee is set in Settings; a bill keeps the fee it was made with. A wrong bill can be deleted by the owner (only before any payment) and made again.', 'บิลครบกำหนดตามวันที่ตั้งไว้ของเดือนของบิล ค่าส่วนกลางตั้งที่หน้า ตั้งค่า บิลแต่ละใบใช้ค่าส่วนกลางตอนที่ออกบิล ถ้าบิลผิด เจ้าของหอลบแล้วออกใหม่ได้ (เฉพาะบิลที่ยังไม่มีการชำระ)'],
   },
   {
     id: 'payment',
@@ -100,7 +101,7 @@ export const GUIDE: readonly GuideSection[] = [
       ['For a tenant not on LINE: tap "Copy message" on their bill and paste it into their chat.', 'ผู้เช่าที่ไม่ได้เชื่อม LINE: แตะ "คัดลอกข้อความ" ที่บิล แล้ววางในแชทของผู้เช่า'],
       ['Pressing the button again is safe: a bill already sent is never sent twice.', 'กดปุ่มซ้ำได้ บิลที่ส่งไปแล้วจะไม่ถูกส่งซ้ำ'],
     ],
-    tip: ['Tenants choose PromptPay QR, bank transfer or cash under the bill. The QR already has the exact amount.', 'ผู้เช่าเลือกจ่ายด้วย QR พร้อมเพย์ โอนเข้าบัญชี หรือเงินสด ใต้บิลได้เลย QR มียอดเงินที่ถูกต้องอยู่แล้ว'],
+    tip: ['Tenants choose PromptPay QR, bank transfer or cash under the bill. The QR already has the exact amount. The message ends with a "View invoice" link (works for 90 days).', 'ผู้เช่าเลือกจ่ายด้วย QR พร้อมเพย์ โอนเข้าบัญชี หรือเงินสด ใต้บิลได้เลย QR มียอดเงินที่ถูกต้องอยู่แล้ว ท้ายข้อความมีลิงก์ "ดูใบแจ้งหนี้" (ใช้ได้ 90 วัน)'],
   },
   {
     id: 'line-slips',

@@ -11,8 +11,8 @@ export interface OverdueRoom { roomNumber: string; tenant: string; bills: number
 
 const satang = (n: number | null | undefined) => Math.round(Number(n ?? 0) * 100);
 
-/** The month the dashboard opens on: the latest month (not in the future) that has bills,
- *  because this month's bills are usually made at the end of the month. */
+/** The month the dashboard opens on: the latest bill month (not in the future) that has bills,
+ *  so on the 1st it stays on last month until this month’s bills are made. */
 export function defaultDashMonth(bills: DashBill[], current: string): string {
   const months = bills.map((b) => b.month ?? '').filter((m) => m && m <= current).sort();
   return months[months.length - 1] ?? current;

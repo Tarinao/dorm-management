@@ -1,5 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import { getLineInfo, getSettings, knownLineAccounts, listProfiles, saveLineInfo, setRole, updateSettings, type LineInfo, type Profile, type Settings as SettingsRow } from '../lib/api';
+import { useRef, useState, type FormEvent } from 'react';
+import {
+  getLineInfo, getSettings, knownLineAccounts, listProfiles, logoUrl, removeLogo, saveLineInfo, setProfileName, setRole, updateSettings, uploadLogo,
+  type LineInfo, type Profile, type Settings as SettingsRow,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../lib/feedback';
 import { parseNum } from '../lib/format';
@@ -13,7 +16,7 @@ export default function Settings() {
   const { t } = useI18n();
   const { data, error, loading, reload } = useLoad(async () => {
     const [settings, profiles, lineAccounts, lineInfo] = await Promise.all([getSettings(), listProfiles(), knownLineAccounts(), getLineInfo()]);
-    return { settings, profiles, lineAccounts, lineInfo };
+    return { settings, profiles, lineAccounts, lineInfo, logo: await logoUrl(settings.logo_path) };
   }, []);
 
   return (
@@ -23,6 +26,7 @@ export default function Settings() {
         {data && (
           <>
             <RatesForm key={data.settings.updated_at} s={data.settings} onSaved={reload} />
+            <InvoiceForm key={'inv' + data.settings.updated_at} s={data.settings} logo={data.logo} onSaved={reload} />
             <PaymentForm key={'pay' + data.settings.updated_at} s={data.settings} lineAccounts={data.lineAccounts} onSaved={reload} />
             <LineInfoForm key={'li' + data.settings.updated_at + data.lineInfo.map((x) => x.updated_at).join()} s={data.settings} info={data.lineInfo} onSaved={reload} />
             <StaffList profiles={data.profiles} onSaved={reload} />
@@ -42,14 +46,15 @@ function RatesForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
     ev.preventDefault();
     const f = new FormData(ev.currentTarget);
     const wOld = parseNum(f.get('water_price_old')), wNew = parseNum(f.get('water_price_new'));
-    const elec = parseNum(f.get('electric_rate')), due = parseNum(f.get('due_day'));
+    const elec = parseNum(f.get('electric_rate')), due = parseNum(f.get('due_day')), common = parseNum(f.get('common_fee'));
     const name = String(f.get('dorm_name') ?? '').trim();
-    if (!name || wOld === null || wOld < 0 || wNew === null || wNew < 0 || elec === null || elec < 0 || due === null || !Number.isInteger(due) || due < 1 || due > 28) {
+    if (!name || wOld === null || wOld < 0 || wNew === null || wNew < 0 || elec === null || elec < 0 || due === null || !Number.isInteger(due) || due < 1 || due > 28
+        || common === null || common < 0) {
       toast(t('err.check'), 'error'); return;
     }
     setBusy(true);
     try {
-      await updateSettings({ dorm_name: name, water_price_old: wOld, water_price_new: wNew, electric_rate: elec, due_day: due });
+      await updateSettings({ dorm_name: name, water_price_old: wOld, water_price_new: wNew, electric_rate: elec, due_day: due, common_fee: common });
       toast(t('common.saved'));
       onSaved();
     } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
@@ -65,6 +70,7 @@ function RatesForm({ s, onSaved }: { s: SettingsRow; onSaved: () => void }) {
           </Field>
           <Field label={t('settings.water_price_new')}><NumInput name="water_price_new" required defaultValue={s.water_price_new} /></Field>
           <Field label={t('settings.electric_rate')}><NumInput name="electric_rate" required defaultValue={s.electric_rate} /></Field>
+          <Field label={t('settings.common_fee')} hint={t('settings.common_fee_hint')}><NumInput name="common_fee" required defaultValue={s.common_fee} /></Field>
           <Field label={t('settings.due_day')} hint={t('settings.due_day_hint')}>
             <input name="due_day" type="number" min={1} max={28} step={1} required defaultValue={s.due_day} />
           </Field>
@@ -156,6 +162,14 @@ function StaffList({ profiles, onSaved }: { profiles: Profile[]; onSaved: () => 
   const { profile: me } = useAuth();
   const { toast } = useFeedback();
 
+  const rename = async (p: Profile, name: string) => {
+    try {
+      await setProfileName(p.id, name);
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); }
+  };
+
   const change = async (p: Profile, value: string) => {
     try {
       await setRole(p.id, value === 'admin' || value === 'staff' ? value : null);
@@ -174,7 +188,10 @@ function StaffList({ profiles, onSaved }: { profiles: Profile[]; onSaved: () => 
           {profiles.map((p) => (
             <tr key={p.id}>
               <td className="break-all">{p.email} {p.id === me?.id && <span className="text-muted">{t('settings.you')}</span>}</td>
-              <td>{p.full_name}</td>
+              <td>
+                <input aria-label={t('common.name')} defaultValue={p.full_name} maxLength={100} placeholder={t('settings.staff_name_ph')}
+                  onBlur={(e) => { if (e.target.value.trim() !== p.full_name) void rename(p, e.target.value); }} />
+              </td>
               <td>
                 {/* You cannot remove your own admin access, so the dorm is never left without an owner. */}
                 <select value={p.role ?? ''} disabled={p.id === me?.id} onChange={(e) => void change(p, e.target.value)}>
@@ -249,6 +266,88 @@ function LineInfoForm({ s, info, onSaved }: { s: SettingsRow; info: LineInfo[]; 
           <Field label={t('li.lng')}><input name="location_lng" inputMode="decimal" autoComplete="off" defaultValue={s.location_lng ?? ''} /></Field>
         </FormGrid>
         <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('li.save')}</Btn>
+      </form>
+    </Panel>
+  );
+}
+
+/** What the printed invoice shows about the dorm. Nothing is hardcoded: every value is typed here.
+ *  The phone on the invoice is the office phone (LINE info below); bank and PromptPay come from
+ *  the payment details. The logo is kept in a private bucket. */
+function InvoiceForm({ s, logo, onSaved }: { s: SettingsRow; logo: string | null; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const save = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    const f = new FormData(ev.currentTarget);
+    const v = (k: string) => String(f.get(k) ?? '').trim();
+    const oa = v('line_oa_id');
+    if ((v('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('email'))) || (oa && !/^@?[A-Za-z0-9._-]{2,40}$/.test(oa))) {
+      toast(t('err.check'), 'error'); return;
+    }
+    setBusy(true);
+    try {
+      await updateSettings({
+        dorm_name_en: v('dorm_name_en'), address: v('address'), tax_id: v('tax_id'), email: v('email'),
+        line_oa_id: oa && !oa.startsWith('@') ? '@' + oa : oa, invoice_note: v('invoice_note'),
+      });
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
+  const pickLogo = async (file: File | undefined) => {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      toast(t('settings.logo_bad'), 'error'); return;
+    }
+    setBusy(true);
+    try {
+      await uploadLogo(file, s.logo_path);
+      toast(t('common.saved'));
+      onSaved();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const dropLogo = async () => {
+    if (!s.logo_path) return;
+    setBusy(true);
+    try { await removeLogo(s.logo_path); onSaved(); } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Panel>
+      <PanelTitle>{t('settings.invoice_title')}</PanelTitle>
+      <Desc>{t('settings.invoice_hint')}</Desc>
+      <div className="flex items-center gap-4 flex-wrap mb-4">
+        {logo
+          ? <img src={logo} alt={t('settings.logo')} className="w-20 h-20 object-contain border border-line rounded bg-white" />
+          : <div className="w-20 h-20 border border-dashed border-line rounded flex items-center justify-center text-[12px] text-muted">{t('settings.no_logo')}</div>}
+        <div className="flex flex-col gap-2">
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => void pickLogo(e.target.files?.[0])} />
+          <Btn small variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>{logo ? t('settings.logo_change') : t('settings.logo_upload')}</Btn>
+          {logo && <Btn small variant="danger" disabled={busy} onClick={() => void dropLogo()}>{t('settings.logo_remove')}</Btn>}
+          <span className="text-[12px] text-muted">{t('settings.logo_hint')}</span>
+        </div>
+      </div>
+      <form onSubmit={save}>
+        <FormGrid>
+          <Field label={t('settings.dorm_name_th')}><input value={s.dorm_name} readOnly disabled /></Field>
+          <Field label={t('settings.dorm_name_en')}><input name="dorm_name_en" maxLength={200} defaultValue={s.dorm_name_en} /></Field>
+          <Field label={t('settings.address')} className="col-span-full"><textarea name="address" rows={2} maxLength={500} defaultValue={s.address} /></Field>
+          <Field label={t('settings.tax_id')} hint={t('common.optional')}><input name="tax_id" maxLength={40} defaultValue={s.tax_id} /></Field>
+          <Field label={t('settings.email')}><input name="email" type="email" maxLength={200} defaultValue={s.email} /></Field>
+          <Field label={t('settings.line_oa_id')} hint={t('settings.line_oa_hint')}><input name="line_oa_id" maxLength={41} placeholder="@yourdorm" defaultValue={s.line_oa_id} /></Field>
+          <Field label={t('settings.invoice_phone')}><input value={s.office_phone} readOnly disabled /></Field>
+          <Field label={t('settings.invoice_note')} className="col-span-full"><textarea name="invoice_note" rows={2} maxLength={1000} defaultValue={s.invoice_note} /></Field>
+        </FormGrid>
+        <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.invoice_save')}</Btn>
       </form>
     </Panel>
   );

@@ -5,9 +5,10 @@
  *   - a logged-in admin or staff member (the app's "Generate & send via LINE" button)
  * Anyone else gets 401/403.
  *
- * POST { mode: 'monthly' }              cron, 1st of the month 08:00 Bangkok: bills for LAST month
+ * POST { mode: 'monthly' }              cron, 1st of the month 08:00 Bangkok: bills for THIS month
+ *                                       (rent + common fee of this month, electric/water of last month)
  * POST { mode: 'remind' }               cron, daily 09:00 Bangkok: reminders for unpaid bills
- * POST { mode: 'send', month }          app button: bills for that month
+ * POST { mode: 'send', month }          app button: bills for that (bill) month
  * The cron modes do nothing while "auto_send_enabled" is off in Settings.
  *
  * Each bill is sent at most once: bills.line_sent_at is claimed with a conditional update before
@@ -15,13 +16,17 @@
  * Rooms without a bill (no reading / meter backwards / no earlier reading) are listed in the
  * summary, which is saved in line_send_runs and, for the monthly run, pushed to the owner's LINE.
  *
- * Secrets (Edge Function secrets): LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET. */
+ * Each bill message ends with a "View invoice" link (a new token per send, see _shared/invoicelink.ts)
+ * when APP_URL is set; without it the message is sent as before, without the link.
+ *
+ * Secrets (Edge Function secrets): LINE_CHANNEL_ACCESS_TOKEN, CRON_SECRET; APP_URL (the app's address). */
 import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
 import {
-  bangkokToday, billMessage, daysBetween, emptySummary, previousMonth, reminderMessage, summaryMessage, timingSafeEqual,
+  bangkokToday, billMessage, daysBetween, emptySummary, reminderMessage, summaryMessage, timingSafeEqual,
   type RunSummary,
 } from '../_shared/core.ts';
 import { forMessage, loadBills, loadSettings, payButtons, type LoadedBill } from '../_shared/bills.ts';
+import { hashToken, invoiceUrl, LINK_DAYS, newToken } from '../_shared/invoicelink.ts';
 import { push, text, textWithButtons } from '../_shared/line.ts';
 
 const CORS = {
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, summary });
     }
 
-    const target = mode === 'monthly' ? previousMonth(bangkokToday()) : month;
+    const target = mode === 'monthly' ? bangkokToday().slice(0, 7) + '-01' : month;
     const summary = emptySummary(mode === 'monthly' ? 'monthly' : 'manual', target);
     await generate(target, summary);
     await sendBills(token, target, summary);
@@ -131,7 +136,8 @@ async function sendBills(token: string, month: string, s: RunSummary) {
     if (!claimed?.length) { s.already_sent.push(room); continue; }
 
     try {
-      await push(token, to, [textWithButtons(billMessage(forMessage(x)), payButtons(x.bill.id, x.lastChoice))]);
+      const link = await invoiceLink(x.bill.id);
+      await push(token, to, [textWithButtons(billMessage({ ...forMessage(x), invoice_url: link }), payButtons(x.bill.id, x.lastChoice))]);
       s.sent.push(room);
     } catch (e) {
       await db.from('bills').update({ line_sent_at: null }).eq('id', x.bill.id);   // not sent: can be sent again
@@ -179,6 +185,20 @@ async function sendReminders(token: string): Promise<RunSummary> {
     }
   }
   return s;
+}
+
+/** A new "View invoice" link for the bill (replacing any earlier one), or null when APP_URL is not
+ *  set or the link could not be saved (the bill is then sent without it). */
+async function invoiceLink(billId: string): Promise<string | null> {
+  const appUrl = Deno.env.get('APP_URL') ?? '';
+  if (!/^https:\/\/[^\s]+$/.test(appUrl)) return null;
+  const tok = newToken();
+  const { error } = await db.from('invoice_links').upsert({
+    bill_id: billId, token_hash: await hashToken(tok),
+    created_at: new Date().toISOString(), expires_at: new Date(Date.now() + LINK_DAYS * 86400 * 1000).toISOString(),
+  }, { onConflict: 'bill_id' });
+  if (error) { console.error('monthly-bills: invoice link not saved:', error.message); return null; }
+  return invoiceUrl(appUrl, tok);
 }
 
 async function saveRun(s: RunSummary, by: string | null) {

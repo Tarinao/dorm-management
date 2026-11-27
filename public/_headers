@@ -1,0 +1,5 @@
+# Cloudflare (Workers static assets): the app is private and the invoice links are personal,
+# so nothing here should be indexed by search engines.
+/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer

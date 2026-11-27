@@ -143,22 +143,36 @@ test('every tenant message starts with Thai', () => {
 
 console.log('Bill message');
 const BILL = {
-  room: '101', tenant: { full_name: 'นางสาว สุดา มีสุข', nickname: 'นก' }, month: '2026-11-01', due_date: '2026-12-05',
+  room: '101', tenant: { full_name: 'นางสาว สุดา มีสุข', nickname: 'นก' }, month: '2026-12-01', due_date: '2026-12-05',
+  rent_month: '2026-12-01', usage_month: '2026-11-01', common_fee: 300,
   rent: 3000, water_people: 2, water_per_person: 150, water_amount: 300,
   elec_prev: 1200, elec_curr: 1320, elec_units: 120, elec_rate: 8, elec_amount: 960,
-  extras: [{ label: 'ค่าส่วนกลาง', amount: 100 }], total: 4360, paid: 0, balance: 4360,
+  extras: [{ label: 'ค่าทำความสะอาด', amount: 100 }], total: 4660, paid: 0, balance: 4660,
 };
-test('starts "ห้อง {room} คุณ{nickname}" and has every line', () => {
+test('starts "ห้อง {room} คุณ{nickname}" and has every line (rent month, common fee, usage month)', () => {
   const m = billMessage(BILL);
   eq(m.split('\n')[0], 'ห้อง 101 คุณนก');
-  for (const part of ['พฤศจิกายน 2569', 'ค่าเช่า ฿3,000.00', '2 คน × ฿150.00 = ฿300.00', '120.0 หน่วย (1,200.0 → 1,320.0)',
-    'ค่าส่วนกลาง ฿100.00', 'รวม ฿4,360.00', '05/12/2569', 'Due 05/12/2026']) eq(m.includes(part), true, part);
+  for (const part of ['บิลค่าเช่าเดือน ธันวาคม 2569', 'ค่าเช่าเดือน ธันวาคม 2569 ฿3,000.00', 'ค่าส่วนกลาง ฿300.00',
+    'ค่าน้ำ เดือน พฤศจิกายน 2569 2 คน × ฿150.00 = ฿300.00', 'ค่าไฟ เดือน พฤศจิกายน 2569 120.0 หน่วย (1,200.0 → 1,320.0)',
+    'ค่าทำความสะอาด ฿100.00', 'รวม ฿4,660.00', '05/12/2569', 'Due 05/12/2026']) eq(m.includes(part), true, part);
+  eq(m.includes('ใบแจ้งหนี้'), false, 'no invoice link unless given');
+});
+test('first bill has no water/electric lines; final bill has no rent or common fee', () => {
+  const first = billMessage({ ...BILL, usage_month: null, water_amount: 0, elec_amount: 0 });
+  eq(first.includes('ค่าน้ำ') || first.includes('ค่าไฟ'), false, 'first');
+  const final = billMessage({ ...BILL, rent_month: null, rent: 0, common_fee: 0 });
+  eq(final.includes('\nค่าเช่าเดือน') || final.includes('ค่าส่วนกลาง'), false, 'final');
+  eq(final.includes('ค่าไฟ เดือน พฤศจิกายน 2569'), true, 'final has usage');
+});
+test('the "View invoice" link is added at the end when there is one', () => {
+  const m = billMessage({ ...BILL, invoice_url: 'https://example.invalid/#/i/abc' });
+  eq(m.split('\n').slice(-2), ['ดูใบแจ้งหนี้ / View invoice:', 'https://example.invalid/#/i/abc']);
 });
 test('no nickname -> first name without the title', () =>
   eq(billMessage({ ...BILL, tenant: { full_name: 'นางสาว สุดา มีสุข', nickname: '' } }).split('\n')[0], 'ห้อง 101 คุณสุดา'));
 test('partly paid shows the balance', () => {
-  const m = billMessage({ ...BILL, paid: 1000, balance: 3360 });
-  eq(m.includes('คงเหลือ ฿3,360.00') && m.includes('Balance ฿3,360.00'), true);
+  const m = billMessage({ ...BILL, paid: 1000, balance: 3660 });
+  eq(m.includes('คงเหลือ ฿3,660.00') && m.includes('Balance ฿3,660.00'), true);
 });
 test('reminder says overdue only after the due date', () => {
   eq(reminderMessage(BILL, '2026-12-05').includes('เลยกำหนด'), false);

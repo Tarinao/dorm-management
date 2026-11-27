@@ -6,9 +6,9 @@ import {
   type BillExtra, type BillSummary, type Payment, type RunSummary,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { previewMonth } from '../lib/billing';
+import { addMonth, previewMonth } from '../lib/billing';
 import { useFeedback } from '../lib/feedback';
-import { bangkokDay, currentMonth, fromMonthInput, meter, monthEnd, parseNum, toMonthInput } from '../lib/format';
+import { bangkokDay, currentMonth, fromMonthInput, meter, parseNum, toMonthInput } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
 import { LoadState, NumInput, StatusPill } from '../components/common';
@@ -32,15 +32,17 @@ export default function Billing() {
   const preview = useMemo(() => {
     if (!data) return [];
     return previewMonth({
-      month, monthEnd: monthEnd(month),
+      month,
       rooms: data.md.rooms, contracts: data.md.contracts, readings: data.md.readings,
-      billedRoomIds: data.md.billedRoomIds,
+      billedContractIds: data.md.billedContractIds,
       electricRate: Number(data.settings.electric_rate),
-    }).filter((r) => r.outcome !== 'no_contract');
+      commonFee: Number(data.settings.common_fee),
+    });
   }, [data, month]);
 
   const ready = preview.filter((r) => r.outcome === 'created');
-  const tenantOf = (roomId: string) => data?.md.contracts.find((c) => c.room_id === roomId)?.tenant_name ?? '';
+  const tenantOf = (contractId: string | null) => data?.md.contracts.find((c) => c.id === contractId)?.tenant_name ?? '';
+  const usageMonth = addMonth(month, -1);
 
   const generate = async () => {
     const ok = await confirm({
@@ -76,16 +78,17 @@ export default function Billing() {
   return (
     <>
       <PageHead title={t('billing.title')} sub={t('billing.subtitle')}>
-        <Field label={t('common.month')}>
+        <Field label={t('billing.bill_month')}>
           <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} />
         </Field>
       </PageHead>
       <LoadState loading={loading && !data} error={error} onRetry={reload}>
         {data && (
           <>
+            <AlertBar kind="info">{t('billing.period_hint', { rent: monthName(month), usage: monthName(usageMonth) })}</AlertBar>
             <Desc>{t('billing.rates', {
               wo: money(data.settings.water_price_old), wn: money(data.settings.water_price_new),
-              e: money(data.settings.electric_rate), d: data.settings.due_day,
+              e: money(data.settings.electric_rate), d: data.settings.due_day, c: money(data.settings.common_fee),
             })}</Desc>
             {Number(data.settings.electric_rate) === 0 && <AlertBar kind="warn">{t('billing.rates_zero')}</AlertBar>}
 
@@ -114,11 +117,12 @@ export default function Billing() {
                     const room = data.md.rooms.find((x) => x.id === r.roomId)!;
                     const editable = r.outcome !== 'already_billed';
                     return (
-                      <div key={r.roomId} className="border border-line rounded p-3">
+                      <div key={r.contractId} className="border border-line rounded p-3">
                         <div className="flex items-baseline justify-between gap-2 flex-wrap mb-2">
                           <div>
                             <strong className="font-display text-lg mr-2">{r.roomNumber}</strong>
-                            {tenantOf(r.roomId) && <span className="text-muted text-[13px]">({tenantOf(r.roomId)})</span>}
+                            {tenantOf(r.contractId) && <span className="text-muted text-[13px]">({tenantOf(r.contractId)})</span>}
+                            {r.kind !== 'regular' && <span className="ml-2 text-[12.5px] text-amber">{t(`billing.kind.${r.kind}` as TKey)}</span>}
                           </div>
                           <span className={`text-[13px] font-semibold ${r.outcome === 'created' ? 'text-sage' : r.outcome === 'already_billed' ? 'text-muted' : 'text-terracotta'}`}>
                             {t(`billing.outcome.${r.outcome}` as TKey)}
@@ -130,10 +134,14 @@ export default function Billing() {
                         )}
                         {r.lines && (
                           <div className="text-[13px] text-ink-soft mt-2 tabular-nums">
-                            {t('common.rent')} {money(r.lines.rent)}
-                            {' · '}{t('billing.water_line', { n: r.lines.waterPeople, r: money(r.lines.waterPerPerson) })} = {money(r.lines.waterAmount)}
-                            {' · '}{t('billing.elec_line', { u: meter(r.lines.elecUnits), r: money(r.lines.elecRate) })} = {money(r.lines.elecAmount)}
-                            {' · '}<strong className="text-ink">{t('common.total')} {money(r.lines.total)}</strong>
+                            {r.lines.rentMonth && <>{t('billing.rent_line', { month: monthName(r.lines.rentMonth) })} {money(r.lines.rent)}{' · '}</>}
+                            {r.lines.commonFee > 0 && <>{t('billing.common_line')} {money(r.lines.commonFee)}{' · '}</>}
+                            {r.lines.usageMonth && <>
+                              {t('billing.water_line_m', { month: monthName(r.lines.usageMonth), n: r.lines.waterPeople, r: money(r.lines.waterPerPerson) })} = {money(r.lines.waterAmount)}
+                              {' · '}{t('billing.elec_line_m', { month: monthName(r.lines.usageMonth), u: meter(r.lines.elecUnits), r: money(r.lines.elecRate) })}
+                              {' '}({meter(r.lines.elecPrev)} → {meter(r.lines.elecCurr)}) = {money(r.lines.elecAmount)}{' · '}
+                            </>}
+                            <strong className="text-ink">{t('common.total')} {money(r.lines.total)}</strong>
                           </div>
                         )}
                       </div>
@@ -146,7 +154,7 @@ export default function Billing() {
             <PanelTitle className="mt-6 mb-3">{t('billing.bills_of', { month: monthName(month) })}</PanelTitle>
             {data.bills.length === 0 ? <Empty>{t('billing.no_bills')}</Empty> : (
               <div className="grid gap-3 md:grid-cols-2">
-                {data.bills.map((b) => <BillCard key={b.id} bill={b} tenant={tenantOf(b.room_id ?? '')} onChanged={reload} />)}
+                {data.bills.map((b) => <BillCard key={b.id} bill={b} tenant={tenantOf(b.contract_id)} onChanged={reload} />)}
               </div>
             )}
           </>
@@ -185,7 +193,7 @@ function RunDialog({ run, onClose }: { run: RunSummary; onClose: () => void }) {
 }
 
 function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: BillExtra[]; payments: Payment[] }; tenant: string; onChanged: () => void }) {
-  const { t, money, date } = useI18n();
+  const { t, money, date, month: monthName } = useI18n();
   const { isAdmin } = useAuth();
   const { toast, confirm } = useFeedback();
   const [adding, setAdding] = useState(false);
@@ -197,6 +205,7 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
   const copyMessage = async () => {
     const msg = billMessage({
       room: bill.room_number ?? '', tenant: { nickname: tenant }, month: bill.month ?? '', due_date: bill.due_date ?? '',
+      rent_month: bill.rent_month, usage_month: bill.usage_month, common_fee: bill.common_fee ?? 0,
       rent: bill.rent ?? 0, water_people: bill.water_people ?? 0, water_per_person: bill.water_per_person ?? 0,
       water_amount: bill.water_amount ?? 0, elec_prev: bill.elec_prev ?? 0, elec_curr: bill.elec_curr ?? 0,
       elec_units: bill.elec_units ?? 0, elec_rate: bill.elec_rate ?? 0, elec_amount: bill.elec_amount ?? 0,
@@ -255,14 +264,17 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
         <div>
           <Link to={`/rooms/${encodeURIComponent(bill.room_number ?? '')}`} className="font-display text-xl font-semibold text-ink no-underline">{bill.room_number}</Link>
           {tenant && <span className="text-[13px] text-ink-soft ml-1">({tenant})</span>}
-          <div className="text-[12px] text-muted">{t('billing.due', { date: date(bill.due_date) })}</div>
+          <div className="text-[12px] text-muted">{t('billing.due', { date: date(bill.due_date) })} · {bill.invoice_no}</div>
         </div>
         <StatusPill status={status} />
       </div>
-      {row(t('common.rent'), bill.rent)}
-      {row(t('billing.water_line', { n: bill.water_people ?? 0, r: money(bill.water_per_person) }), bill.water_amount)}
-      {row(t('billing.elec_line', { u: meter(bill.elec_units), r: money(bill.elec_rate) }), bill.elec_amount,
-        t('billing.meter_line', { prev: meter(bill.elec_prev), curr: meter(bill.elec_curr) }))}
+      {bill.rent_month && row(t('billing.rent_line', { month: monthName(bill.rent_month) }), bill.rent)}
+      {Number(bill.common_fee) > 0 && row(t('billing.common_line'), bill.common_fee)}
+      {bill.usage_month && <>
+        {row(t('billing.water_line_m', { month: monthName(bill.usage_month), n: bill.water_people ?? 0, r: money(bill.water_per_person) }), bill.water_amount)}
+        {row(t('billing.elec_line_m', { month: monthName(bill.usage_month), u: meter(bill.elec_units), r: money(bill.elec_rate) }), bill.elec_amount,
+          t('billing.meter_line', { prev: meter(bill.elec_prev), curr: meter(bill.elec_curr) }))}
+      </>}
       {bill.extras.map((x) => (
         <div key={x.id} className="flex justify-between gap-3 py-1 text-[14px]">
           <span>
@@ -309,6 +321,7 @@ function BillCard({ bill, tenant, onChanged }: { bill: BillSummary & { extras: B
           {open && <Btn small onClick={() => setPaying(true)}>{t('pay.record')}</Btn>}
           <Btn small variant="secondary" onClick={() => setAdding(true)}>{t('billing.add_extra')}</Btn>
           <Btn small variant="secondary" onClick={() => void copyMessage()}>{t('billing.copy_msg')}</Btn>
+          <Link to={`/bills/${bill.id}/invoice`} className="no-underline"><Btn small variant="secondary">{t('billing.invoice')}</Btn></Link>
           {isAdmin && Number(bill.paid) === 0 && <Btn small variant="danger" onClick={() => void removeBill()}>{t('billing.delete_bill')}</Btn>}
         </div>
       )}

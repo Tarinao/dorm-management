@@ -57,6 +57,7 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261126101711_line_bot.sql` | LINE chat: `line_users` (language, menu step, handover, "wants to talk"), `line_info` (dorm information in Thai + English, empty at first), office phone + map pin in Settings. Applied 2026-11-26 |
 | `20261126193657_viewings.sql` | `viewings` (viewing appointments, separate from reservations; members read/add/edit, admin deletes), the bot's `book_time` step, and moves the LINE requests that were saved as pending reservations (no room, no fee) into `viewings`. Applied 2026-11-27 |
 | `20261127071400_move_in_line.sql` | `move_in()` from a reservation links the reservation's LINE account to the new tenant (like an approved link request), unless that account belongs to a current tenant. No new tables. Applied 2026-11-27 |
+| `20261127120000_billing_period_invoice.sql` | New billing period (bill of month M = rent + common fee for M, water + electric for M-1; first and final bills), one bill per contract and month, `settings.common_fee` (300) copied onto each bill and included in every total, invoice numbers `INV` + YYYYMM + 6 digits, invoice details in Settings, `tenants.address`, private "branding" bucket for the logo, `invoice_links` (hashed LINE invoice tokens, service role only). Existing bills keep their totals. **Not applied yet** |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 
@@ -138,7 +139,8 @@ What is imported, and how:
 | Electric rate, water per person, due day | Compared only. The values set in the new app are kept |
 | Room rent / floor / notes | Updated if different and the room has no tenant now. If the two old files disagree, the room is skipped and reported |
 | Tenants | Tenant + active contract, only for rooms that are empty in the new app. Records with no name or no move-in date are skipped |
-| Bills | Bill (rent + electric) + extra charges (common fee, other) + a payment marked *imported* if it was paid. Checked: the parts must add up to the old total |
+| Bills | Bill (rent + common fee + electric, the old rule: all of one month) + extra charges (old water cost, other) + a payment marked *imported* if it was paid. Checked: the parts must add up to the old total |
+| Common fee | Settings, only if the old app had one above 0 and the new app still has the default 300 |
 | Owner name, PromptPay, language, repairs | Not imported (these features are not in the new app) |
 
 ## 7. Put it online (Cloudflare Workers)
@@ -157,7 +159,8 @@ The repo includes `wrangler.jsonc`, which serves the built `dist/` folder.
 | `npm run dev` | Run locally |
 | `npm run typecheck` | TypeScript check of the app and of the Edge Functions (`tsconfig.functions.json`, no Deno needed) |
 | `npm run build` | Type check + production build into `dist/` (one `index.html`) |
-| `npm run test:billing` | Bill calculations (3 example rooms incl. a partial payment), rounding, due dates, dashboard totals |
+| `npm run test:billing` | Billing period (December bill = December rent + common fee + November usage), first and final bills, a room changing tenants, common fee changes, rounding, due dates, dashboard totals |
+| `npm run test:invoice` | Invoice: amount in Thai words (`bahtText`: satang, 0, round numbers, ล้าน, เอ็ด / ยี่), numbered lines, footer |
 | `npm run test:guide` | The guide has all topics (5 + 3 LINE), every step in both Thai and English |
 | `npm run test:line` | LINE signature check, room numbers typed in the chat, "101 (nickname)" labels |
 | `npm run test:promptpay` | PromptPay QR payload and CRC16, slip QR references, payment buttons, bill/reminder/summary messages |
@@ -169,18 +172,24 @@ The repo includes `wrangler.jsonc`, which serves the built `dist/` folder.
 
 ## How billing works
 
-- **Rent**: the room's monthly rent.
-- **Water**: number of people × the room's water price per person (105 old customer / 150 new customer, set in Settings).
-- **Electric**: (this month's meter − previous reading) × the electric rate per unit, rounded to 2 decimals.
+Bills are made on the 1st of each month. The bill of month M has:
+
+- **Rent** for M (in advance): the room's monthly rent.
+- **Common fee** (ส่วนกลาง) for M: `settings.common_fee` (300 by default), copied onto the bill when it is made, so changing it later only affects new bills.
+- **Water** for M-1: number of people × the room's water price per person (105 old customer / 150 new customer, set in Settings).
+- **Electric** for M-1: (the M-1 meter reading − the reading before it) × the electric rate per unit, rounded to 2 decimals.
 - **Extras**: any extra charges added to the bill (parking, cleaning…).
-- **Due date**: the due day (Settings) of the **following** month. After that date, an unpaid bill counts as *overdue*.
+- **First bill** of a new contract (moved in during M): rent + common fee only. **Final bill** after a move-out during M-1: water + electric only, up to the move-out reading. A room changing tenants can have both in the same month (one bill per contract and month).
+- **Due date**: the due day (Settings) of M. After that date, an unpaid bill counts as *overdue*.
+- **Total** = rent + common fee + water + electric + extras, everywhere (bill list, dashboard, LINE message, PromptPay QR amount, payment limit).
+- **Invoice**: each bill has a number `INV` + YYYYMM + 6 digits (`INV202612000013`), given once and never reused, and a printable A4 invoice ("Invoice" on a bill). The dorm details on it come from **Settings → Invoice details**.
 - **Payments**: several payments per bill are allowed. The status (*unpaid / partly paid / paid*) is computed from them, and the database refuses a payment larger than the balance. Each payment gets a receipt number (`R-000001`, …).
 
 Money is shown in Thai baht with 2 decimals (฿1,234.50). Dates are shown as DD/MM/YYYY, with the Buddhist year in Thai (24/11/2569).
 
 ## LINE
 
-The LINE Official Account talks to three Edge Functions in `supabase/functions/`:
+The LINE Official Account and the app use these Edge Functions in `supabase/functions/`:
 
 | Function | Called by | Protection |
 |---|---|---|
@@ -188,11 +197,12 @@ The LINE Official Account talks to three Edge Functions in `supabase/functions/`
 | `line-link` | The app's Approve / Reject buttons | Logged-in users only; runs as that user (RLS) |
 | `line-notify` | After "Confirm" on a viewing or reservation: tells the guest on LINE (fixed message built from the row; only for confirmed rows that came with a LINE account) | Logged-in users only; runs as that user (RLS) |
 | `monthly-bills` | The scheduled jobs, and the app's "Generate & send via LINE" | `verify_jwt = false`; accepts only the cron secret header or a logged-in admin/staff login |
+| `invoice` | The "View invoice" link at the end of each LINE bill (tenants are not logged in) | `verify_jwt = false`; the link's token (32 random bytes) is checked against its SHA-256 in `invoice_links` and expires after 90 days; returns only that bill. The page itself is the app's public route `#/i/<token>` (Edge Functions on supabase.co cannot serve HTML pages), marked noindex |
 
 Webhook URL for the LINE Developers console: `https://YOUR-PROJECT-REF.supabase.co/functions/v1/line-webhook`
 (Messaging API tab → Webhook URL → Verify, then turn **Use webhook** on. In LINE OA Manager → Response settings, turn **Auto-response messages off** and **Webhooks on**.)
 
-**Secrets** (Supabase → Edge Functions → Secrets; never in code, `.env` or git): `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`.
+**Secrets** (Supabase → Edge Functions → Secrets; never in code, `.env` or git): `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `CRON_SECRET`, and `APP_URL` (the app's address, e.g. `https://….workers.dev`, used for the "View invoice" link; without it bills are sent without the link).
 
 ### LINE: scheduled jobs
 
@@ -253,6 +263,7 @@ Remove it again in LINE OA Manager → Rich menus.
 7. Viewings: apply `20261126193657_viewings.sql` and run `supabase/tests/viewings.test.sql`, deploy the web app, then deploy `line-webhook` (the bot writes the new `book_time` step and the `viewings` table, so not before the migration). (Migration applied and test passed 2026-11-27; `line-webhook` v8, then v9 with LINE profile-picture refresh.)
 8. Move-in carries LINE over: apply `20261127071400_move_in_line.sql`, run `supabase/tests/move_in_line.test.sql`, then deploy the web app. No function deploy needed. (Migration applied and test passed 2026-11-27.)
 9. Confirm messages + ครับ: deploy `line-notify` (new), then `line-webhook`, `line-link` and `monthly-bills` (their Thai replies now end with ครับ; no logic changed), then the web app. Test: `npm run test:notify`.
+10. Billing period, common fee and invoices: apply `20261127120000_billing_period_invoice.sql`, run `supabase/tests/billing_period.test.sql` (it rolls back, but uses invoice numbers: sequences are not rolled back), deploy the web app, set the `APP_URL` secret, deploy `invoice` (new) and `monthly-bills` (bills this month instead of last month, adds the invoice link). Then fill in **Settings → Invoice details** and the staff names. Tests: `npm run test:billing`, `npm run test:invoice`, `npm run test:promptpay`.
 
 ## Troubleshooting
 

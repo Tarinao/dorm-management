@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import {
-  contractTenantLine, getRoom, listBills, listPayments, moveIn, moveOut, setNicknameForContract, unlinkLine, updateContract, updateRoom, updateTenant,
+  contractTenantLine, getRoom, listBills, listPayments, moveIn, moveOut, unlinkLine, updateContract, updateRoom, updateTenant, updateTenantForContract,
   type BillRow, type ContractWithTenant, type Reservation, type Room, type Settings, type Ticket,
 } from '../lib/api';
 import { ReservationCard, ReserveButton } from '../components/Reservations';
@@ -185,7 +185,7 @@ function CurrentTenant({ roomNumber, contract, onSaved }: { roomNumber: string; 
       if (tenant) {
         await updateTenant(tenant.id, {
           full_name: s('full_name'), nickname: s('nickname'), phone: s('phone'), id_card_ref: s('id_card_ref'),
-          emergency_name: s('emergency_name'), emergency_phone: s('emergency_phone'),
+          emergency_name: s('emergency_name'), emergency_phone: s('emergency_phone'), address: s('address'),
         });
       }
       await updateContract(contract.id, { end_date: end, deposit });
@@ -233,7 +233,7 @@ function CurrentTenant({ roomNumber, contract, onSaved }: { roomNumber: string; 
   );
 }
 
-function TenantFields({ tenant }: { tenant?: Partial<{ full_name: string; nickname: string; phone: string; id_card_ref: string; emergency_name: string; emergency_phone: string }> | null }) {
+function TenantFields({ tenant }: { tenant?: Partial<{ full_name: string; nickname: string; phone: string; id_card_ref: string; emergency_name: string; emergency_phone: string; address: string }> | null }) {
   const { t } = useI18n();
   return (
     <FormGrid>
@@ -243,6 +243,9 @@ function TenantFields({ tenant }: { tenant?: Partial<{ full_name: string; nickna
       <Field label={t('f.id_card_ref')} hint={t('f.id_card_hint')}><input name="id_card_ref" defaultValue={tenant?.id_card_ref ?? ''} autoComplete="off" /></Field>
       <Field label={t('f.emergency_name')}><input name="emergency_name" defaultValue={tenant?.emergency_name ?? ''} autoComplete="off" /></Field>
       <Field label={t('f.emergency_phone')}><input name="emergency_phone" type="tel" inputMode="tel" defaultValue={tenant?.emergency_phone ?? ''} autoComplete="off" /></Field>
+      <Field label={t('f.address')} hint={t('f.address_hint')} className="col-span-full">
+        <textarea name="address" rows={2} maxLength={500} defaultValue={tenant?.address ?? ''} autoComplete="off" />
+      </Field>
     </FormGrid>
   );
 }
@@ -324,7 +327,7 @@ function MoveInDialog({ room, settings, reservation = null, onClose, onDone }: {
         startDate: start, endDate: end, monthlyRent: rent, deposit, electric, waterPerPerson, occupants,
         reservationId: reservation?.id ?? null,
       });
-      if (s('nickname')) await setNicknameForContract(contractId, s('nickname'));
+      if (s('nickname') || s('address')) await updateTenantForContract(contractId, { nickname: s('nickname'), address: s('address') });
       let done = t('movein.done', { n: room.number });
       if (reservation?.line_user_id) {
         // The database links the guest's LINE account, except when it belongs to a current tenant.

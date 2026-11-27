@@ -134,14 +134,18 @@ export function parsePayPostback(data: string | null | undefined): { method: Pay
 export interface BillForMessage {
   room: string;
   tenant: { full_name?: string | null; nickname?: string | null } | null;
-  month: string;                     // 'YYYY-MM-01'
+  month: string;                     // bill month 'YYYY-MM-01'
+  rent_month: string | null;         // rent + common fee are for this month (null: final bill, usage only)
+  usage_month: string | null;        // water + electric are for this month (null: first bill)
   due_date: string;                  // 'YYYY-MM-DD'
   rent: number | string;
+  common_fee: number | string;
   water_people: number | string; water_per_person: number | string; water_amount: number | string;
   elec_prev: number | string; elec_curr: number | string; elec_units: number | string;
   elec_rate: number | string; elec_amount: number | string;
   extras: { label: string; amount: number | string }[];
   total: number | string; paid: number | string; balance: number | string;
+  invoice_url?: string | null;       // the read-only invoice page (the LINE "View invoice" link)
 }
 
 /** "ห้อง 101 คุณนก" */
@@ -153,12 +157,16 @@ export function billGreeting(room: string, tenant: BillForMessage['tenant']): st
 /** The monthly bill as sent on LINE (and copied by staff for tenants not on LINE). */
 export function billMessage(b: BillForMessage): string {
   const paid = Number(b.paid) > 0;
+  const usage = b.usage_month ? ` เดือน ${monthName(b.usage_month, 'th')}` : '';
   return [
     billGreeting(b.room, b.tenant),
     `บิลค่าเช่าเดือน ${monthName(b.month, 'th')}`,
-    `ค่าเช่า ${baht(b.rent)}`,
-    `ค่าน้ำ ${Number(b.water_people)} คน × ${baht(b.water_per_person)} = ${baht(b.water_amount)}`,
-    `ค่าไฟ ${meter1(b.elec_units)} หน่วย (${meter1(b.elec_prev)} → ${meter1(b.elec_curr)}) × ${baht(b.elec_rate)} = ${baht(b.elec_amount)}`,
+    ...(b.rent_month ? [`ค่าเช่าเดือน ${monthName(b.rent_month, 'th')} ${baht(b.rent)}`] : []),
+    ...(Number(b.common_fee) > 0 ? [`ค่าส่วนกลาง ${baht(b.common_fee)}`] : []),
+    ...(b.usage_month ? [
+      `ค่าน้ำ${usage} ${Number(b.water_people)} คน × ${baht(b.water_per_person)} = ${baht(b.water_amount)}`,
+      `ค่าไฟ${usage} ${meter1(b.elec_units)} หน่วย (${meter1(b.elec_prev)} → ${meter1(b.elec_curr)}) × ${baht(b.elec_rate)} = ${baht(b.elec_amount)}`,
+    ] : []),
     ...b.extras.map((x) => `${x.label} ${baht(x.amount)}`),
     `รวม ${baht(b.total)}`,
     ...(paid ? [`ชำระแล้ว ${baht(b.paid)} · คงเหลือ ${baht(b.balance)}`] : []),
@@ -168,6 +176,7 @@ export function billMessage(b: BillForMessage): string {
     `Room ${b.room} · Bill for ${monthName(b.month, 'en')}`,
     `${paid ? 'Balance' : 'Total'} ${baht(paid ? b.balance : b.total)} · Due ${dmy(b.due_date, 'en')}`,
     'Please choose how to pay below.',
+    ...(b.invoice_url ? ['', 'ดูใบแจ้งหนี้ / View invoice:', b.invoice_url] : []),
   ].join('\n');
 }
 

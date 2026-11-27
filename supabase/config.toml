@@ -19,3 +19,8 @@ verify_jwt = true
 # JWT). Both are checked inside the function; the gateway check is off because cron sends no JWT.
 [functions.monthly-bills]
 verify_jwt = false
+
+# The "View invoice" link in LINE bills: opened by tenants who are not logged in, so the gateway
+# check is off; the function checks the link's token (hashed, with an expiry) itself.
+[functions.invoice]
+verify_jwt = false

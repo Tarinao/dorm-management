@@ -44,9 +44,12 @@ export default function Receipt() {
 
               <div className="border-t border-b border-black/30 py-2 mb-2">
                 <div className="text-[12px] uppercase tracking-wide text-black/60 mb-1">{t('receipt.items')}</div>
-                {line(t('common.rent'), b.rent)}
-                {line(t('billing.water_line', { n: b.water_people ?? 0, r: money(b.water_per_person) }), b.water_amount)}
-                {line(`${t('billing.elec_line', { u: meter(b.elec_units), r: money(b.elec_rate) })} (${meter(b.elec_prev)} → ${meter(b.elec_curr)})`, b.elec_amount)}
+                {b.rent_month && line(t('billing.rent_line', { month: month(b.rent_month) }), b.rent)}
+                {Number(b.common_fee) > 0 && line(t('billing.common_line'), b.common_fee)}
+                {b.usage_month && <>
+                  {line(t('billing.water_line_m', { month: month(b.usage_month), n: b.water_people ?? 0, r: money(b.water_per_person) }), b.water_amount)}
+                  {line(`${t('billing.elec_line_m', { month: month(b.usage_month), u: meter(b.elec_units), r: money(b.elec_rate) })} (${meter(b.elec_prev)} → ${meter(b.elec_curr)})`, b.elec_amount)}
+                </>}
                 {extras.map((x) => <div key={x.id}>{line(x.label, x.amount)}</div>)}
                 {line(t('receipt.bill_total'), b.total, true)}
               </div>

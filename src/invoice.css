@@ -1,0 +1,89 @@
+/* Printable A4 invoice (ใบแจ้งหนี้). Black on white, thin rules, Sarabun (bundled: src/assets/fonts,
+ * SIL Open Font License, see OFL.txt there). One A4 page; the browser's print / "Save as PDF". */
+
+@font-face {
+  font-family: 'Sarabun'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('./assets/fonts/sarabun-thai-400-normal.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: 'Sarabun'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('./assets/fonts/sarabun-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Sarabun'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('./assets/fonts/sarabun-thai-700-normal.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: 'Sarabun'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('./assets/fonts/sarabun-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+.invoice-page { min-height: 100vh; background: #e9e7e2; padding: 16px 12px 40px; color-scheme: light; }
+.invoice-toolbar { max-width: 210mm; margin: 0 auto 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.invoice-sheet {
+  page: invoice;
+  box-sizing: border-box;
+  width: 210mm; max-width: 100%; min-height: 297mm; margin: 0 auto; padding: 14mm 14mm 12mm;
+  background: #fff; color: #000;
+  font-family: 'Sarabun', sans-serif; font-size: 10.5pt; line-height: 1.45;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column;
+}
+.invoice-sheet * { box-sizing: border-box; }
+/* Undo the app's table / heading look (grey capital headers, row lines, display fonts). */
+.invoice-sheet th, .invoice-sheet td {
+  color: #000; text-transform: none; letter-spacing: normal; font-size: inherit; border-bottom: none; padding: 0; vertical-align: top;
+}
+.invoice-sheet h1, .invoice-sheet h2 { font-family: 'Sarabun', sans-serif; letter-spacing: normal; color: #000; }
+.invoice-sheet b, .invoice-sheet strong, .invoice-sheet th, .invoice-sheet h1, .invoice-sheet h2 { font-weight: 700; }
+
+.inv-head { display: flex; justify-content: space-between; gap: 8mm; }
+.inv-dorm { display: flex; gap: 4mm; align-items: flex-start; min-width: 0; }
+.inv-logo { width: 22mm; height: 22mm; object-fit: contain; flex: none; }
+.inv-dorm-name { font-size: 14pt; font-weight: 700; line-height: 1.25; }
+.inv-dorm-name-en { font-size: 11pt; font-weight: 700; }
+.inv-small { font-size: 9.5pt; }
+.inv-title { text-align: right; flex: none; }
+.inv-title h1 { font-size: 17pt; margin: 0; line-height: 1.2; }
+.inv-original { font-size: 10pt; margin-bottom: 2mm; }
+.inv-meta { border-collapse: collapse; margin-left: auto; font-size: 10pt; }
+.inv-meta td { padding: 0 0 0 3mm; text-align: left; vertical-align: top; }
+.inv-meta td:first-child { font-weight: 700; padding-left: 0; white-space: nowrap; }
+
+.inv-rule { border: 0; border-top: 1px solid #000; margin: 3mm 0; }
+.inv-rule-thin { border: 0; border-top: 0.5px solid #888; margin: 0; }
+
+.inv-customer h2 { font-size: 10.5pt; margin: 0 0 1mm; }
+
+.inv-table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+.inv-table th { text-align: left; padding: 1.6mm 1.5mm; border-top: 1px solid #000; border-bottom: 1px solid #000; font-size: 10pt; }
+.inv-table td { padding: 1.2mm 1.5mm; border-bottom: 0.5px solid #bbb; vertical-align: top; }
+.inv-table tr:last-child td { border-bottom: none; }
+.inv-table .no { width: 13mm; text-align: center; }
+.inv-table .amt { width: 32mm; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.inv-total { display: flex; justify-content: space-between; align-items: center; gap: 6mm; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 2.5mm 1.5mm; margin-top: 3mm; }
+.inv-total-words { font-size: 10pt; }
+.inv-total-label { font-weight: 700; white-space: nowrap; }
+.inv-total-amount { font-weight: 700; font-size: 13pt; margin-left: 4mm; font-variant-numeric: tabular-nums; }
+
+.inv-note { margin-top: 3mm; min-height: 8mm; white-space: pre-line; }
+.inv-sign { margin-top: 8mm; display: flex; justify-content: flex-end; }
+.inv-sign div { text-align: center; }
+.inv-grow { flex: 1; }
+.inv-footer { text-align: center; font-size: 9.5pt; border-top: 1px solid #000; padding-top: 2.5mm; margin-top: 4mm; }
+.inv-footer p { margin: 0; }
+
+@page invoice { size: A4; margin: 0; }
+@media print {
+  .invoice-page { background: #fff; padding: 0; min-height: 0; }
+  .invoice-toolbar { display: none !important; }
+  .invoice-sheet { box-shadow: none; margin: 0; width: 210mm; min-height: 296mm; }
+}
+.inv-dorm-text { min-width: 0; }
+.inv-total-right { display: flex; align-items: baseline; flex: none; }

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { useAuth } from './lib/auth';
 import { useI18n } from './lib/i18n';
 import { configError } from './lib/supabase';
@@ -19,6 +19,7 @@ import Reservations from './pages/Reservations';
 import Viewings from './pages/Viewings';
 import BookingReceipt from './pages/BookingReceipt';
 import Maintenance from './pages/Maintenance';
+import Invoice, { PublicInvoice } from './pages/Invoice';
 
 /** Staff who type /settings are sent back; the database refuses their writes anyway. */
 function AdminOnly({ children }: { children: ReactNode }) {
@@ -29,9 +30,14 @@ function AdminOnly({ children }: { children: ReactNode }) {
 export default function App() {
   const { t, lang } = useI18n();
   const { ready, session, role, profile } = useAuth();
+  const { pathname } = useLocation();
 
   if (configError) {
     return <div className="p-6 max-w-[640px] mx-auto"><AlertBar kind="warn">{configError}</AlertBar></div>;
+  }
+  // The invoice link sent on LINE: opens without logging in (the token is checked by the server).
+  if (pathname.startsWith('/i/')) {
+    return <Routes><Route path="/i/:token" element={<PublicInvoice />} /></Routes>;
   }
   if (!ready) return <Empty>{t('common.loading')}</Empty>;
   if (!session) return <Login />;
@@ -49,6 +55,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="bills/:id/invoice" element={<Invoice />} />
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />

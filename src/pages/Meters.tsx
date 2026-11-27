@@ -41,7 +41,7 @@ export default function Meters() {
         roomId: room.id, number: room.number, status: room.status,
         tenant: contract ? (data.contracts.find((c) => c.id === contract.id)?.tenant_name ?? '') : null,
         saved, prev: before[before.length - 1] ?? null,
-        billed: data.billedRoomIds.has(room.id),
+        billed: data.usageBilledRoomIds.has(room.id),
       };
     });
     return [...out.filter((c) => c.tenant !== null), ...out.filter((c) => c.tenant === null)];

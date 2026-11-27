@@ -41,7 +41,7 @@ interface OldBackup {
 
 /** What the import compares against: the current state of the new database. */
 export interface DbState {
-  settings: { dorm_name: string; water_price_old: number; water_price_new: number; electric_rate: number; due_day: number };
+  settings: { dorm_name: string; water_price_old: number; water_price_new: number; electric_rate: number; due_day: number; common_fee: number };
   rooms: { id: string; number: string; floor: number | null; default_rent: number; status: string; notes: string }[];
   active_contracts: { room_id: string; tenant_name: string }[];
   tenants: { id: string; full_name: string }[];
@@ -62,11 +62,12 @@ interface Writer {
   updateRoom(id: string, patch: Record<string, unknown>): Promise<void>;
   moveInImported(x: { roomId: string; fullName: string; phone: string; idCardRef: string; notes: string; start: string; end: string | null;
     rent: number; deposit: number; occupants: number }): Promise<void>;
-  importBill(x: { roomId: string; month: string; rent: number; elecPrev: number; elecCurr: number; elecRate: number; dueDate: string;
+  importBill(x: { roomId: string; month: string; rent: number; commonFee: number; elecPrev: number; elecCurr: number; elecRate: number; dueDate: string;
     extras: { label: string; amount: number }[]; payment: { amount: number; paidOn: string } | null }): Promise<void>;
 }
 
 const DEFAULT_DORM_NAME = 'My Dorm';
+const DEFAULT_COMMON_FEE = 300;   // settings.common_fee default (migration 20261127120000)
 const num = (v: unknown) => Number(v ?? 0);
 const cents = (v: number) => Math.round(v * 100);
 const money = (v: number) => '฿' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -101,8 +102,17 @@ export function buildPlan(live: LiveBackup, old: OldBackup, db: DbState): Item[]
     same('water per person (old customers)', s.water_per_person, db.settings.water_price_old, 'water_price_old');
     same('due day', s.due_day, db.settings.due_day, 'due_day');
     items.push({ section: 'settings', what: 'owner name, PromptPay id/type, language', action: 'skip', reason: 'not used by the new app (PromptPay was removed)' });
-    if (num(s.common_fee) || num(os.commonFee)) items.push({ section: 'settings', what: `common fee ${s.common_fee || os.commonFee}`, action: 'skip', reason: 'no common fee setting in the new app; add it as an extra charge on bills' });
-    else items.push({ section: 'settings', what: 'common fee 0', action: 'skip', reason: 'zero, nothing to import' });
+    // Common fee: the new app has settings.common_fee (default 300). Taken over only while it is still the default.
+    const oldFee = num(s.common_fee ?? os.commonFee);
+    const dbFee = num(db.settings.common_fee ?? DEFAULT_COMMON_FEE);
+    if (!(oldFee > 0)) items.push({ section: 'settings', what: `common fee ${oldFee}`, action: 'skip', reason: 'none in the old data; the new app keeps its own' });
+    else if (oldFee === dbFee) items.push({ section: 'settings', what: `common fee ${oldFee}`, action: 'skip', reason: 'already there' });
+    else if (dbFee !== DEFAULT_COMMON_FEE) {
+      items.push({ section: 'settings', what: `common fee ${oldFee}`, action: 'skip', reason: `already changed in the new app to ${dbFee} (kept)` });
+    } else {
+      items.push({ section: 'settings', what: `common fee ${dbFee} → ${oldFee}`, action: 'import', reason: 'new app still has the default common fee',
+        write: (w) => w.updateSettings({ common_fee: oldFee }) });
+    }
     if (os.waterRate !== undefined) items.push({ section: 'settings', what: `old water rate ${os.waterRate} (per unit)`, action: 'skip', reason: 'water is now a flat price per person; the meter is not used' });
   }
 
@@ -188,18 +198,19 @@ export function buildPlan(live: LiveBackup, old: OldBackup, db: DbState): Item[]
     if (cents(elec) !== cents(num(b.elecCost))) { items.push({ section: 'bills', what, action: 'skip', reason: `electric cost ${b.elecCost} ≠ units × rate (${elec})` }); continue; }
     const extras = [
       ...(num(b.waterCost) > 0 ? [{ label: 'Water (old app) / ค่าน้ำ (ระบบเก่า)', amount: num(b.waterCost) }] : []),
-      ...(num(b.commonFee) > 0 ? [{ label: 'Common fee / ค่าส่วนกลาง', amount: num(b.commonFee) }] : []),
       ...(num(b.otherAmount) > 0 ? [{ label: b.otherLabel || 'Other / อื่น ๆ', amount: num(b.otherAmount) }] : []),
     ];
-    const sum = cents(num(b.rentAmount)) + cents(elec) + extras.reduce((s2, x) => s2 + cents(x.amount), 0);
+    // The common fee goes on the bill's own common_fee (part of the total), not as an extra charge.
+    const commonFee = Math.max(0, num(b.commonFee));
+    const sum = cents(num(b.rentAmount)) + cents(commonFee) + cents(elec) + extras.reduce((s2, x) => s2 + cents(x.amount), 0);
     if (sum !== cents(num(b.total))) { items.push({ section: 'bills', what, action: 'skip', reason: `parts add up to ${money(sum / 100)}, not the total` }); continue; }
     const paid = b.status === 'paid';
     if (paid && !isDate(b.paidDate)) { items.push({ section: 'bills', what, action: 'skip', reason: 'marked paid but has no paid date' }); continue; }
     const due = isDate(b.dueDate) ? b.dueDate : `${b.month}-28`;
     items.push({ section: 'bills', what, action: 'import',
-      reason: `rent ${b.rentAmount} + electric ${elec} (${b.elecPrev}→${b.elecCurr} × ${b.elecRate})${extras.map((x) => ` + ${x.label.split(' /')[0].toLowerCase()} ${x.amount}`).join('')}` +
+      reason: `rent ${b.rentAmount}${commonFee ? ` + common fee ${commonFee}` : ''} + electric ${elec} (${b.elecPrev}→${b.elecCurr} × ${b.elecRate})${extras.map((x) => ` + ${x.label.split(' /')[0].toLowerCase()} ${x.amount}`).join('')}` +
         (paid ? `; paid ${b.paidDate} → imported payment (method unknown)` : '; unpaid'),
-      write: (w) => w.importBill({ roomId: room.id, month: `${b.month}-01`, rent: num(b.rentAmount), elecPrev: num(b.elecPrev), elecCurr: num(b.elecCurr),
+      write: (w) => w.importBill({ roomId: room.id, month: `${b.month}-01`, rent: num(b.rentAmount), commonFee, elecPrev: num(b.elecPrev), elecCurr: num(b.elecCurr),
         elecRate: num(b.elecRate), dueDate: due, extras, payment: paid ? { amount: num(b.total), paidOn: b.paidDate } : null }) });
   }
 
@@ -229,7 +240,7 @@ function ok<T>(r: { data: T; error: { message: string } | null }, what: string):
 }
 
 async function readDb(sb: Client): Promise<DbState> {
-  const settings = ok(await sb.from('settings').select('dorm_name, water_price_old, water_price_new, electric_rate, due_day').eq('id', 1).single(), 'settings');
+  const settings = ok(await sb.from('settings').select('dorm_name, water_price_old, water_price_new, electric_rate, due_day, common_fee').eq('id', 1).single(), 'settings');
   const rooms = ok(await sb.from('rooms').select('id, number, floor, default_rent, status, notes'), 'rooms');
   const contracts = ok(await sb.from('contracts').select('room_id, tenants(full_name)').eq('status', 'active'), 'contracts') as unknown as { room_id: string; tenants: { full_name: string } | null }[];
   const tenants = ok(await sb.from('tenants').select('id, full_name'), 'tenants');
@@ -255,7 +266,9 @@ function writer(sb: Client): Writer {
     },
     async importBill(x) {
       const b = ok(await sb.from('bills').insert({
-        room_id: x.roomId, contract_id: null, month: x.month, rent: x.rent, elec_prev: x.elecPrev, elec_curr: x.elecCurr,
+        // Old bills: rent and electric of the same month (the old rule).
+        room_id: x.roomId, contract_id: null, month: x.month, rent_month: x.month, usage_month: x.month, rent: x.rent, common_fee: x.commonFee,
+        elec_prev: x.elecPrev, elec_curr: x.elecCurr,
         elec_rate: x.elecRate, water_people: 0, water_per_person: 0, due_date: x.dueDate, note: 'Imported from the old app',
       }).select('id').single(), 'insert bill') as { id: string };
       try {

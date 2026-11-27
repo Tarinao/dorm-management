@@ -71,7 +71,10 @@ export function BillPayCard({ bill, payments, onPay, onChanged, showRoom = true 
         <div className="min-w-0">
           {showRoom && <Link to={`/rooms/${encodeURIComponent(bill.room_number ?? '')}`} className="font-display text-xl font-semibold text-ink no-underline mr-2">{bill.room_number}</Link>}
           {bill.tenant_short && <span className="text-[13px] text-ink-soft">{showRoom ? `(${bill.tenant_short})` : `${bill.room_number} (${bill.tenant_short})`}</span>}
-          <div className="text-[12.5px] text-muted">{month(bill.month)} · {t('billing.due', { date: date(bill.due_date) })}</div>
+          <div className="text-[12.5px] text-muted">
+            {month(bill.month)} · {t('billing.due', { date: date(bill.due_date) })}
+            {' · '}<Link to={`/bills/${bill.id}/invoice`} className="text-teal">{t('billing.invoice')}</Link>
+          </div>
         </div>
         <StatusPill status={status} />
       </div>

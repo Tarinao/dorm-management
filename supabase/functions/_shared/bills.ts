@@ -6,7 +6,8 @@ import { PAY_BUTTON_1, type Lang } from './lang.ts';
 
 export type BillRow = {
   id: string; room_id: string; room_number: string; contract_id: string | null; month: string; due_date: string;
-  rent: number; water_people: number; water_per_person: number; water_amount: number;
+  rent_month: string | null; usage_month: string | null; rent: number; common_fee: number;
+  water_people: number; water_per_person: number; water_amount: number;
   elec_prev: number; elec_curr: number; elec_units: number; elec_rate: number; elec_amount: number;
   total: number; paid: number; balance: number;
   line_sent_at: string | null; line_reminded_at: string | null; pay_method_chosen: string | null;
@@ -14,7 +15,7 @@ export type BillRow = {
 export type Tenant = { id: string; full_name: string; nickname: string; line_user_id: string | null };
 export type LoadedBill = { bill: BillRow; extras: { label: string; amount: number }[]; tenant: Tenant | null; lastChoice: string | null };
 
-const BILL_COLS = 'id, room_id, room_number, contract_id, month, due_date, rent, water_people, water_per_person, water_amount, ' +
+const BILL_COLS = 'id, room_id, room_number, contract_id, month, rent_month, usage_month, due_date, rent, common_fee, water_people, water_per_person, water_amount, ' +
   'elec_prev, elec_curr, elec_units, elec_rate, elec_amount, total, paid, balance, line_sent_at, line_reminded_at, pay_method_chosen';
 
 function must<T>(r: { data: T | null; error: { message: string } | null }): T {
@@ -62,7 +63,8 @@ export async function loadBills(
 export function forMessage(x: LoadedBill): BillForMessage {
   const b = x.bill;
   return {
-    room: b.room_number, tenant: x.tenant, month: b.month, due_date: b.due_date, rent: b.rent,
+    room: b.room_number, tenant: x.tenant, month: b.month, rent_month: b.rent_month, usage_month: b.usage_month,
+    due_date: b.due_date, rent: b.rent, common_fee: b.common_fee,
     water_people: b.water_people, water_per_person: b.water_per_person, water_amount: b.water_amount,
     elec_prev: b.elec_prev, elec_curr: b.elec_curr, elec_units: b.elec_units, elec_rate: b.elec_rate, elec_amount: b.elec_amount,
     extras: x.extras, total: b.total, paid: b.paid, balance: b.balance,

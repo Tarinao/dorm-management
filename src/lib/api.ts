@@ -5,6 +5,7 @@ import { sb } from './supabase';
 import type { Tables, Views } from './database.types';
 import { addMonths, byRoomNumber, monthEnd, tenantShort, todayISO } from './format';
 import type { ContractLite, Reading } from './billing';
+import type { InvoiceData, InvoiceDorm } from './invoice';
 
 export type Room = Tables<'rooms'>;
 export type Tenant = Tables<'tenants'>;
@@ -171,27 +172,31 @@ export interface MonthData {
   rooms: Room[];
   contracts: (ContractLite & { tenant_name: string })[];
   readings: Reading[];
-  billedRoomIds: Set<string>;
+  billedContractIds: Set<string>;   // contracts that already have a bill for this (bill) month
+  usageBilledRoomIds: Set<string>;  // rooms whose usage of this month is already on a bill (Meters page)
 }
 
 /** Everything the Meters and Billing pages need for a month. Readings cover the 12 months
- *  before it, which is enough to find each occupied room's previous reading. */
+ *  before it, which is enough to find each occupied room's previous reading. Contracts include
+ *  those that left during the month before (their final bill is made this month). */
 export async function loadMonth(month: string): Promise<MonthData> {
   const end = monthEnd(month);
   const [rooms, contracts, readings, bills] = await Promise.all([
     sb.from('rooms').select('*'),
     sb.from('contracts').select('id, room_id, start_date, moved_out_on, monthly_rent, created_at, tenants(full_name, nickname)')
-      .lte('start_date', end).or(`moved_out_on.is.null,moved_out_on.gte.${month}`),
+      .lte('start_date', end).or(`moved_out_on.is.null,moved_out_on.gte.${addMonths(month, -1)}`),
     sb.from('meter_readings').select('id, room_id, kind, month, read_on, water, electric, created_at')
       .gte('month', addMonths(month, -12)).lte('read_on', end),
-    sb.from('bills').select('room_id').eq('month', month),
+    sb.from('bills').select('room_id, contract_id, month, usage_month').or(`month.eq.${month},usage_month.eq.${month}`),
   ]);
+  const billRows = must(bills) ?? [];
   return {
     rooms: (must(rooms) ?? []).sort((a, b) => byRoomNumber(a.number, b.number)),
     // tenant_name here is the short name shown as "101 (Nok)" (nickname, else first name).
     contracts: (must(contracts) ?? []).map(({ tenants, ...c }) => ({ ...c, tenant_name: tenantShort(tenants) })),
     readings: must(readings) ?? [],
-    billedRoomIds: new Set((must(bills) ?? []).map((b) => b.room_id)),
+    billedContractIds: new Set(billRows.filter((b) => b.month === month && b.contract_id).map((b) => b.contract_id!)),
+    usageBilledRoomIds: new Set(billRows.filter((b) => b.usage_month === month).map((b) => b.room_id)),
   };
 }
 
@@ -368,9 +373,10 @@ export async function contractTenantLine(contractId: string): Promise<string | n
 }
 
 /** Move-in creates the tenant inside move_in(); the nickname is saved right after. */
-export async function setNicknameForContract(contractId: string, nickname: string) {
+/** Tenant details move_in() does not take (nickname, address), saved right after it. */
+export async function updateTenantForContract(contractId: string, patch: Partial<Pick<Tenant, 'nickname' | 'address'>>) {
   const c = mustOne(await sb.from('contracts').select('tenant_id').eq('id', contractId).single());
-  await updateTenant(c.tenant_id, { nickname });
+  await updateTenant(c.tenant_id, patch);
 }
 
 /* ------------------------------------------------------------------ bills on LINE (0010) */
@@ -672,4 +678,84 @@ export async function linkViewingReservation(id: string, reservationId: string) 
 export async function deleteViewing(id: string): Promise<boolean> {
   const rows = must(await sb.from('viewings').delete().eq('id', id).select('id'));
   return (rows?.length ?? 0) > 0;
+}
+
+/* ------------------------------------------------------------------ invoices (ใบแจ้งหนี้) */
+/** Everything the printed invoice of one bill shows (null when the bill does not exist). */
+export async function getInvoice(billId: string): Promise<InvoiceData | null> {
+  const bill = must(await sb.from('bill_summary').select('*').eq('id', billId).maybeSingle());
+  if (!bill) return null;
+  const [extras, contract, settings] = await Promise.all([
+    sb.from('bill_extras').select('label, amount').eq('bill_id', billId).order('created_at').then(must),
+    bill.contract_id
+      ? sb.from('contracts').select('tenants(full_name, address, phone)').eq('id', bill.contract_id).maybeSingle().then(must)
+      : Promise.resolve(null),
+    getSettings(),
+  ]);
+  const tn = (contract as { tenants: { full_name: string; address: string; phone: string } | null } | null)?.tenants ?? null;
+  return {
+    bill: {
+      id: bill.id!, invoice_no: bill.invoice_no ?? '', month: bill.month!, rent_month: bill.rent_month, usage_month: bill.usage_month,
+      room_number: bill.room_number ?? '', rent: Number(bill.rent), common_fee: Number(bill.common_fee),
+      water_people: Number(bill.water_people), water_per_person: Number(bill.water_per_person), water_amount: Number(bill.water_amount),
+      elec_prev: Number(bill.elec_prev), elec_curr: Number(bill.elec_curr), elec_units: Number(bill.elec_units), elec_amount: Number(bill.elec_amount),
+      total: Number(bill.total), due_date: bill.due_date!, created_at: bill.created_at!, note: bill.note ?? '', issued_by_name: bill.issued_by_name ?? '',
+    },
+    extras: (extras ?? []).map((x) => ({ label: x.label, amount: Number(x.amount) })),
+    tenant: tn,
+    dorm: dormForInvoice(settings, await logoUrl(settings.logo_path)),
+  };
+}
+
+export function dormForInvoice(s: Settings, logo: string | null): InvoiceDorm {
+  return {
+    name: s.dorm_name, name_en: s.dorm_name_en, address: s.address, tax_id: s.tax_id, phone: s.office_phone, email: s.email,
+    line_oa_id: s.line_oa_id, invoice_note: s.invoice_note, bank_name: s.bank_name, bank_branch: s.bank_branch,
+    bank_account_name: s.bank_account_name, bank_account_number: s.bank_account_number, promptpay_id: s.promptpay_id, logo,
+  };
+}
+
+/** The invoice behind a LINE "View invoice" link (no login). Null for a wrong or expired link. */
+export async function getPublicInvoice(token: string): Promise<InvoiceData | null> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  const { data, error } = await sb.functions.invoke<InvoiceData>('invoice', { body: { token } });
+  if (error) {
+    const status = (error as { context?: Response }).context?.status;
+    if (status === 404 || status === 400) return null;
+    throw error;
+  }
+  return data ?? null;
+}
+
+/* ------------------------------------------------------------------ logo (private "branding" bucket) */
+/** A short-lived link to the logo, or null when there is none. */
+export async function logoUrl(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  const { data } = await sb.storage.from('branding').createSignedUrl(path, 3600);
+  return data?.signedUrl ?? null;
+}
+
+/** Admin only (Storage policies + settings RLS). Replaces the logo; the old file is removed. */
+export async function uploadLogo(file: File, oldPath: string | null) {
+  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  const path = `logo/logo-${Date.now()}.${ext}`;
+  const up = await sb.storage.from('branding').upload(path, file, { contentType: file.type, upsert: false });
+  if (up.error) throw up.error;
+  try {
+    await updateSettings({ logo_path: path });
+  } catch (e) {
+    await sb.storage.from('branding').remove([path]);
+    throw e;
+  }
+  if (oldPath && oldPath !== path) await sb.storage.from('branding').remove([oldPath]);
+}
+
+export async function removeLogo(path: string) {
+  await updateSettings({ logo_path: null });
+  await sb.storage.from('branding').remove([path]);
+}
+
+/* ------------------------------------------------------------------ staff names (shown as "Issued by") */
+export async function setProfileName(id: string, fullName: string) {
+  must(await sb.from('profiles').update({ full_name: fullName.trim() }).eq('id', id).select('id').single());
 }
