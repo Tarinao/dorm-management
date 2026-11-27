@@ -139,6 +139,7 @@ export const GUIDE: readonly GuideSection[] = [
       ['Tap "Confirm" when the booking is sure. A vacant room turns "Reserved".', 'แตะ "ยืนยันการจอง" เมื่อการจองแน่นอนแล้ว ห้องว่างจะเปลี่ยนเป็น "จองแล้ว"'],
       ['After a viewing, tap "Reserve a room" on it in "Viewings": the name and phone are filled in for you.', 'หลังลูกค้าดูห้องแล้ว แตะ "จองห้อง" ที่นัดนั้นในหน้า "นัดดูห้อง" ชื่อและเบอร์โทรจะถูกกรอกให้'],
       ['On move-in day tap "Convert to move-in". The check-in form opens with the name, phone and date filled in, and the paid booking fee counts toward the deposit.', 'วันย้ายเข้า แตะ "ย้ายเข้าจากการจอง" ฟอร์มทำสัญญาจะเปิดพร้อมชื่อ เบอร์โทร และวันที่ และค่าจองที่จ่ายแล้วจะนับเป็นส่วนหนึ่งของเงินประกัน'],
+      ['If the guest booked through LINE, their LINE account is linked to the room at check-in, so they do not need to connect their room in the bot.', 'ถ้าผู้จองจองผ่าน LINE บัญชี LINE ของเขาจะเชื่อมกับห้องให้ตอนย้ายเข้า ไม่ต้องเชื่อมต่อห้องในบอทอีก'],
       ['If the guest changes their mind, tap "Cancel booking". The room becomes free again.', 'ถ้าผู้จองเปลี่ยนใจ แตะ "ยกเลิกการจอง" ห้องจะกลับมาว่าง'],
     ],
     tip: ['Bookings past their expiry date are closed automatically every night. Only the owner can delete a booking.', 'การจองที่เลยวันหมดอายุจะถูกปิดอัตโนมัติทุกคืน เฉพาะเจ้าของหอเท่านั้นที่ลบการจองได้'],

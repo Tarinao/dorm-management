@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import {
-  getRoom, listBills, listPayments, moveIn, moveOut, setNicknameForContract, unlinkLine, updateContract, updateRoom, updateTenant,
+  contractTenantLine, getRoom, listBills, listPayments, moveIn, moveOut, setNicknameForContract, unlinkLine, updateContract, updateRoom, updateTenant,
   type BillRow, type ContractWithTenant, type Reservation, type Room, type Settings, type Ticket,
 } from '../lib/api';
 import { ReservationCard, ReserveButton } from '../components/Reservations';
@@ -325,7 +325,13 @@ function MoveInDialog({ room, settings, reservation = null, onClose, onDone }: {
         reservationId: reservation?.id ?? null,
       });
       if (s('nickname')) await setNicknameForContract(contractId, s('nickname'));
-      toast(t('movein.done', { n: room.number }));
+      let done = t('movein.done', { n: room.number });
+      if (reservation?.line_user_id) {
+        // The database links the guest's LINE account, except when it belongs to a current tenant.
+        const linked = await contractTenantLine(contractId).catch(() => null);
+        done += ' ' + (linked === reservation.line_user_id ? t('movein.line_linked') : t('movein.line_kept'));
+      }
+      toast(done);
       onDone();
     } catch (e) { toast(friendlyError(e, t), 'error'); setBusy(false); }
   };
@@ -336,6 +342,14 @@ function MoveInDialog({ room, settings, reservation = null, onClose, onDone }: {
       <h2 className="text-xl mt-0">{t('movein.title', { n: room.number })}</h2>
       {room.status === 'maintenance' && <AlertBar kind="warn">{t('movein.maintenance_warn')}</AlertBar>}
       {reservation && <AlertBar kind="info">{t('movein.from_reservation', { name: reservation.guest_name })}</AlertBar>}
+      {reservation?.line_user_id && (
+        <AlertBar kind="info">
+          <span className="inline-flex items-center gap-2">
+            <LineAvatar lineUserId={reservation.line_user_id} name={reservation.guest_name} size={28} />
+            {t('movein.line_hint')}
+          </span>
+        </AlertBar>
+      )}
       <form onSubmit={submit}>
         <PanelTitle className="mt-3 mb-2">{t('movein.step_tenant')}</PanelTitle>
         <TenantFields tenant={reservation ? { full_name: reservation.guest_name, phone: reservation.phone } : null} />

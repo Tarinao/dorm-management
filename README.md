@@ -56,6 +56,7 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261126101653_reservations_maintenance.sql` | Reservations (one active booking per room, booking-fee receipts B-000001, expiry), maintenance tickets (block a vacant room), private "maintenance" photo bucket, move-in from a reservation, move-out keeps bookings / blocks, nightly expiry job (00:05 Bangkok). Applied 2026-11-26 |
 | `20261126101711_line_bot.sql` | LINE chat: `line_users` (language, menu step, handover, "wants to talk"), `line_info` (dorm information in Thai + English, empty at first), office phone + map pin in Settings. Applied 2026-11-26 |
 | `20261126193657_viewings.sql` | `viewings` (viewing appointments, separate from reservations; members read/add/edit, admin deletes), the bot's `book_time` step, and moves the LINE requests that were saved as pending reservations (no room, no fee) into `viewings`. Applied 2026-11-27 |
+| `20261127071400_move_in_line.sql` | `move_in()` from a reservation links the reservation's LINE account to the new tenant (like an approved link request), unless that account belongs to a current tenant. No new tables. Applied 2026-11-27 |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 
@@ -219,7 +220,7 @@ LINE's free plan includes a limited number of pushed messages per month (bills, 
 - **Viewings are not reservations.** "Book a viewing" in the LINE chat creates a *viewing* (page **Viewings**), which holds no room. After the visit, "Reserve a room" on the viewing opens a new reservation with the guest's name, phone and LINE account, and links the two.
 - **Maintenance block:** "Block the room" on a ticket sets a vacant room to *Maintenance* while the ticket is open or in progress; done / cancelled (or unticking the box) frees it. Occupied rooms keep their status. Photos are in the private Storage bucket `maintenance` (staff see them through 1-hour links).
 
-**Database tests.** `supabase/tests/reservations_maintenance.test.sql`, `supabase/tests/line_bot.test.sql` and `supabase/tests/viewings.test.sql` run every rule above against the real triggers, as an admin and as a staff login, inside one transaction that is **rolled back** at the end (nothing is kept). Run them in the SQL editor after applying the migrations. Before release they were run against all migrations on a local Postgres (PGlite); each passed, and each fails when an expectation is changed on purpose.
+**Database tests.** `supabase/tests/reservations_maintenance.test.sql`, `supabase/tests/line_bot.test.sql`, `supabase/tests/viewings.test.sql` and `supabase/tests/move_in_line.test.sql` run every rule above against the real triggers, as an admin and as a staff login, inside one transaction that is **rolled back** at the end (nothing is kept). Run them in the SQL editor after applying the migrations. Before release they were run against all migrations on a local Postgres (PGlite); each passed, and each fails when an expectation is changed on purpose.
 
 ## LINE chat (welcome, menu, contact staff)
 
@@ -248,7 +249,8 @@ Remove it again in LINE OA Manager → Rich menus.
 4. Fill in **Settings → LINE info**, office phone and map pin.
 5. Deploy `line-link`, then `line-webhook`. (Done 2026-11-26, before the 1 December run at the owner's request; `monthly-bills` was not changed.)
 6. Optional: create the rich menu. (Done 2026-11-27.)
-7. Viewings: apply `20261126193657_viewings.sql` and run `supabase/tests/viewings.test.sql`, deploy the web app, then deploy `line-webhook` (the bot writes the new `book_time` step and the `viewings` table, so not before the migration). (Migration applied and test passed 2026-11-27.)
+7. Viewings: apply `20261126193657_viewings.sql` and run `supabase/tests/viewings.test.sql`, deploy the web app, then deploy `line-webhook` (the bot writes the new `book_time` step and the `viewings` table, so not before the migration). (Migration applied and test passed 2026-11-27; `line-webhook` v8, then v9 with LINE profile-picture refresh.)
+8. Move-in carries LINE over: apply `20261127071400_move_in_line.sql`, run `supabase/tests/move_in_line.test.sql`, then deploy the web app. No function deploy needed. (Migration applied and test passed 2026-11-27.)
 
 ## Troubleshooting
 

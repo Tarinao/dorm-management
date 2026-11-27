@@ -359,6 +359,14 @@ export async function unlinkLine(tenantId: string) {
   await updateTenant(tenantId, { line_user_id: null, line_display_name: '', line_linked_at: null });
 }
 
+/** The LINE account linked to the tenant of a contract (null = not linked). move_in() links the
+ *  reservation's LINE account unless it belongs to a current tenant (migration 20261127071400). */
+export async function contractTenantLine(contractId: string): Promise<string | null> {
+  const c = mustOne(await sb.from('contracts').select('tenants(line_user_id)').eq('id', contractId).single()) as unknown as
+    { tenants: { line_user_id: string | null } | null };
+  return c.tenants?.line_user_id ?? null;
+}
+
 /** Move-in creates the tenant inside move_in(); the nickname is saved right after. */
 export async function setNicknameForContract(contractId: string, nickname: string) {
   const c = mustOne(await sb.from('contracts').select('tenant_id').eq('id', contractId).single());
