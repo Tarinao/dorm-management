@@ -1,5 +1,5 @@
 -- Database tests for the billing period, the common fee and invoice numbers
--- (migration 20261127120000_billing_period_invoice).
+-- (migration 20261127111701_billing_period_invoice).
 -- One transaction, ROLLED BACK at the end: nothing is kept. Any failure stops with "TEST FAILED: ...".
 -- Uses made-up rooms T961..T963 and two made-up users (admin, staff).
 

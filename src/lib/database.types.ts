@@ -6,7 +6,7 @@
  * and 20261126101653_reservations_maintenance.sql (marked "0012", hand-written)
  * and 20261126101711_line_bot.sql (marked "0013", hand-written)
  * and 20261126193657_viewings.sql (marked "0014", hand-written)
- * and 20261127120000_billing_period_invoice.sql (marked "0016", hand-written).
+ * and 20261127111701_billing_period_invoice.sql (marked "0016", hand-written).
  * Hand edits marked "edited": move_in's p_tenant_id and p_end_date accept null
  * (the SQL function handles null; the generator cannot tell).
  * Regenerate after any schema change. */

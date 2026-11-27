@@ -67,7 +67,7 @@ interface Writer {
 }
 
 const DEFAULT_DORM_NAME = 'My Dorm';
-const DEFAULT_COMMON_FEE = 300;   // settings.common_fee default (migration 20261127120000)
+const DEFAULT_COMMON_FEE = 300;   // settings.common_fee default (migration 20261127111701)
 const num = (v: unknown) => Number(v ?? 0);
 const cents = (v: number) => Math.round(v * 100);
 const money = (v: number) => '฿' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
