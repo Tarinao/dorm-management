@@ -50,7 +50,7 @@ export function InvoiceView({ data }: { data: InvoiceData }) {
 
       <table className="inv-table">
         <thead>
-          <tr><th className="no">ลำดับ(#)</th><th>รายการชำระ (Description)</th><th className="amt">ราคา(Price)</th></tr>
+          <tr><th className="no"><span className="inv-wide">ลำดับ</span>(#)</th><th>รายการชำระ (Description)</th><th className="amt">ราคา(Price)</th></tr>
         </thead>
         <tbody>
           {lines.map((l) => (

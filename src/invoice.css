@@ -79,6 +79,48 @@
 .inv-footer { text-align: center; font-size: 9.5pt; border-top: 1px solid #000; padding-top: 2.5mm; margin-top: 4mm; }
 .inv-footer p { margin: 0; }
 
+/* Phones and narrow windows (the LINE link is usually opened on a phone): the same invoice, laid
+ * out in one column with readable text. Printing always uses the A4 layout above. */
+.invoice-sheet { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media screen and (max-width: 820px) {
+  .invoice-page { padding: 0 0 24px; background: #fff; }
+  .invoice-toolbar { padding: 10px 12px 0; margin-bottom: 4px; }
+  .invoice-sheet {
+    width: 100%; min-height: 0; padding: 18px 16px 24px; box-shadow: none;
+    font-size: 15px; line-height: 1.55; overflow-wrap: break-word;
+  }
+  .inv-head { flex-direction: column; gap: 14px; }
+  .inv-dorm { gap: 12px; }
+  .inv-logo { width: 56px; height: 56px; }
+  .inv-dorm-name { font-size: 19px; }
+  .inv-dorm-name-en { font-size: 15px; }
+  .inv-small { font-size: 13.5px; }
+  .inv-title { text-align: left; border-top: 1px solid #000; padding-top: 12px; }
+  .inv-title h1 { font-size: 22px; }
+  .inv-original { font-size: 13.5px; margin-bottom: 8px; }
+  .inv-meta { margin-left: 0; width: 100%; font-size: 14.5px; }
+  .inv-meta td { padding: 2px 0 2px 12px; }
+  .inv-meta td:first-child { width: 1%; }
+  .inv-rule { margin: 14px 0; }
+  .inv-table { margin-top: 10px; }
+  .inv-table th { font-size: 13px; padding: 8px 4px; }
+  .inv-table td { padding: 9px 4px; }
+  .inv-table .no { width: 30px; }
+  .inv-wide { display: none; }
+  .inv-meta td:last-child, .inv-table .amt { overflow-wrap: normal; }
+  .inv-table .amt { width: auto; padding-left: 8px; }
+  .inv-total { flex-direction: column-reverse; align-items: stretch; gap: 4px; padding: 10px 4px; margin-top: 10px; }
+  .inv-total-right { justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
+  .inv-total-label { white-space: normal; }
+  .inv-total-amount { font-size: 19px; margin-left: 0; }
+  .inv-total-words { font-size: 13.5px; text-align: right; }
+  .inv-note { margin-top: 14px; min-height: 0; }
+  .inv-sign { margin-top: 28px; justify-content: center; }
+  .inv-grow { display: none; }
+  .inv-footer { font-size: 13.5px; margin-top: 22px; padding-top: 12px; }
+  .inv-footer p + p { margin-top: 2px; }
+}
+
 @page invoice { size: A4; margin: 0; }
 @media print {
   .invoice-page { background: #fff; padding: 0; min-height: 0; }
