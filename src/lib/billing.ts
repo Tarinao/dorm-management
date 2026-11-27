@@ -19,7 +19,7 @@
  *   electric         = (current - previous units) x electric rate, rounded to 2 decimals
  *                      (half away from zero, like Postgres round())
  *   total            = rent + common fee + water + electric + extra charges
- *   due date         = settings.due_day of the bill month M
+ *   due date         = settings.due_day of the bill month M, or the day the bill is made if later
  *
  * Money is computed in whole satang (1/100 baht) to avoid floating-point drift.
  */
@@ -178,9 +178,11 @@ export function paymentStatus(total: number, payments: number[]): { paid: number
   return { paid: paidS / 100, balance: balanceS / 100, status };
 }
 
-/** settings.due_day of the bill month ('YYYY-MM-01'). */
-export function dueDate(month: string, dueDay: number): string {
-  return `${month.slice(0, 8)}${String(dueDay).padStart(2, '0')}`;
+/** settings.due_day of the bill month ('YYYY-MM-01'), or the day the bill is made ('YYYY-MM-DD',
+ *  Bangkok) if that is later, so a bill is never overdue the moment it is made. */
+export function dueDate(month: string, dueDay: number, madeOn: string): string {
+  const due = `${month.slice(0, 8)}${String(dueDay).padStart(2, '0')}`;
+  return madeOn > due ? madeOn : due;
 }
 
 export interface PreviewRow {

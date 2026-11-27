@@ -47,7 +47,7 @@ export const GUIDE: readonly GuideSection[] = [
       ['To add a charge (e.g. parking), tap "+ Add charge" on that bill.', 'ถ้ามีค่าใช้จ่ายเพิ่ม (เช่น ค่าจอดรถ) แตะ "+ เพิ่มรายการ" ที่บิลนั้น'],
       ['Tap "Invoice" on a bill to print it on A4 or save it as PDF.', 'แตะ "ใบแจ้งหนี้" ที่บิล เพื่อพิมพ์บนกระดาษ A4 หรือบันทึกเป็น PDF'],
     ],
-    tip: ['Bills are due on the due day of the bill month. The common fee is set in Settings; a bill keeps the fee it was made with. A wrong bill can be deleted by the owner (only before any payment) and made again.', 'บิลครบกำหนดตามวันที่ตั้งไว้ของเดือนของบิล ค่าส่วนกลางตั้งที่หน้า ตั้งค่า บิลแต่ละใบใช้ค่าส่วนกลางตอนที่ออกบิล ถ้าบิลผิด เจ้าของหอลบแล้วออกใหม่ได้ (เฉพาะบิลที่ยังไม่มีการชำระ)'],
+    tip: ['Bills are due on the due day of the bill month (a bill made after that day is due the day it is made). The common fee is set in Settings; a bill keeps the fee it was made with. A wrong bill can be deleted by the owner (only before any payment) and made again.', 'บิลครบกำหนดตามวันที่ตั้งไว้ของเดือนของบิล (บิลที่ออกหลังวันนั้นครบกำหนดในวันที่ออกบิล) ค่าส่วนกลางตั้งที่หน้า ตั้งค่า บิลแต่ละใบใช้ค่าส่วนกลางตอนที่ออกบิล ถ้าบิลผิด เจ้าของหอลบแล้วออกใหม่ได้ (เฉพาะบิลที่ยังไม่มีการชำระ)'],
   },
   {
     id: 'payment',

@@ -129,7 +129,14 @@ begin
   perform pg_temp.check((select invoice_no ~ '^INV202612' and issued_by_name = 'Admin Test' from public.bills where id = b.id),
                         'invoice number and issuer cannot be changed');
 
-  -- 8. Invoice links are invisible to app users (service role only)
+  -- 8. A bill made after its due day is due the day it is made, not overdue at once
+  --    (November bill for tenant one, made today, after 5 November: migration 20261127113555)
+  perform public.generate_bills('2026-11-01');
+  select * into f from public.bill_summary where contract_id = c1 and month = '2026-11-01';
+  perform pg_temp.check(f.due_date = greatest('2026-11-05'::date, (now() at time zone 'Asia/Bangkok')::date) and f.is_overdue = false,
+                        'bill made after the due day: due the day it is made, not overdue (got ' || f.due_date || ')');
+
+  -- 9. Invoice links are invisible to app users (service role only)
   begin
     perform 1 from public.invoice_links;
     raise exception 'TEST FAILED: app user could read invoice_links';

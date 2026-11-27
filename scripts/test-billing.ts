@@ -182,9 +182,11 @@ test('payments: partial and full, against the total that includes the common fee
   assert.deepEqual(paymentStatus(6528, [6228]).status, 'partial');   // paying the total without the common fee is not enough
 });
 
-test('due date is settings.due_day of the bill month', () => {
-  assert.equal(dueDate('2026-12-01', 5), '2026-12-05');
-  assert.equal(dueDate('2027-01-01', 5), '2027-01-05');
+test('due date is settings.due_day of the bill month, or the day the bill is made if later', () => {
+  assert.equal(dueDate('2026-12-01', 5, '2026-12-01'), '2026-12-05');   // made on the 1st: due on the 5th
+  assert.equal(dueDate('2027-01-01', 5, '2026-12-31'), '2027-01-05');   // made early
+  assert.equal(dueDate('2026-11-01', 5, '2026-11-27'), '2026-11-27');   // first bill after a move-in on the 27th
+  assert.equal(dueDate('2026-12-01', 5, '2026-12-05'), '2026-12-05');
 });
 
 test('dashboard: 3 example bills (one partly paid) give the right expected / collected / outstanding', () => {
