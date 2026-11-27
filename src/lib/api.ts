@@ -378,6 +378,20 @@ export type RunSummary = import('../../supabase/functions/_shared/core').RunSumm
 export type SendRun = Tables<'line_send_runs'>;
 
 /** Error code from an Edge Function's { error: 'CODE' } answer, as a normal error. */
+/* ---------------------------------------------------------------- LINE message on confirm */
+export type NotifyResult = { pushed: boolean; reason?: 'NO_LINE' | 'NOT_CONFIRMED' | 'PUSH_FAILED' };
+
+/** Tells the guest on LINE that staff confirmed their viewing / reservation (line-notify).
+ *  Never throws: the confirmation itself is already saved, so a failed message is only reported. */
+export async function notifyConfirmed(kind: 'viewing' | 'reservation', id: string): Promise<NotifyResult> {
+  try {
+    const { data, error } = await sb.functions.invoke<NotifyResult>('line-notify', { body: { kind, id } });
+    return error || !data ? { pushed: false, reason: 'PUSH_FAILED' } : data;
+  } catch {
+    return { pushed: false, reason: 'PUSH_FAILED' };
+  }
+}
+
 async function functionError(error: unknown): Promise<never> {
   let code = '';
   try { code = (await (error as { context?: Response }).context?.json())?.error ?? ''; } catch { /* not JSON */ }

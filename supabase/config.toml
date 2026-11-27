@@ -11,6 +11,10 @@ verify_jwt = false
 [functions.line-link]
 verify_jwt = true
 
+# Called by the app after "Confirm" on a viewing / reservation: only logged-in users.
+[functions.line-notify]
+verify_jwt = true
+
 # Called by pg_cron (header x-cron-secret = CRON_SECRET) and by the app (a logged-in admin/staff
 # JWT). Both are checked inside the function; the gateway check is off because cron sends no JWT.
 [functions.monthly-bills]

@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
+import type { NotifyResult } from '../lib/api';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { AlertBar, Btn, Empty, Pill } from './ui';
+
+/** Toast after a confirm: adds whether the guest got the LINE message (nothing extra if not on LINE). */
+export function confirmToast(ok: string, r: NotifyResult | null, t: (k: TKey) => string): [string, 'ok' | 'error'] {
+  if (!r || r.reason === 'NO_LINE' || r.reason === 'NOT_CONFIRMED') return [ok, 'ok'];
+  return r.pushed ? [`${ok} · ${t('notify.sent')}`, 'ok'] : [`${ok} · ${t('notify.failed')}`, 'error'];
+}
 
 /** Coloured pill with the translated status name. */
 export function StatusPill({ status }: { status: string | null | undefined }) {

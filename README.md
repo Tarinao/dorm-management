@@ -186,6 +186,7 @@ The LINE Official Account talks to three Edge Functions in `supabase/functions/`
 |---|---|---|
 | `line-webhook` | LINE (every chat message, button tap, slip photo) | `verify_jwt = false`; every request must carry LINE's signature made with `LINE_CHANNEL_SECRET` |
 | `line-link` | The app's Approve / Reject buttons | Logged-in users only; runs as that user (RLS) |
+| `line-notify` | After "Confirm" on a viewing or reservation: tells the guest on LINE (fixed message built from the row; only for confirmed rows that came with a LINE account) | Logged-in users only; runs as that user (RLS) |
 | `monthly-bills` | The scheduled jobs, and the app's "Generate & send via LINE" | `verify_jwt = false`; accepts only the cron secret header or a logged-in admin/staff login |
 
 Webhook URL for the LINE Developers console: `https://YOUR-PROJECT-REF.supabase.co/functions/v1/line-webhook`
@@ -251,6 +252,7 @@ Remove it again in LINE OA Manager → Rich menus.
 6. Optional: create the rich menu. (Done 2026-11-27.)
 7. Viewings: apply `20261126193657_viewings.sql` and run `supabase/tests/viewings.test.sql`, deploy the web app, then deploy `line-webhook` (the bot writes the new `book_time` step and the `viewings` table, so not before the migration). (Migration applied and test passed 2026-11-27; `line-webhook` v8, then v9 with LINE profile-picture refresh.)
 8. Move-in carries LINE over: apply `20261127071400_move_in_line.sql`, run `supabase/tests/move_in_line.test.sql`, then deploy the web app. No function deploy needed. (Migration applied and test passed 2026-11-27.)
+9. Confirm messages + ครับ: deploy `line-notify` (new), then `line-webhook`, `line-link` and `monthly-bills` (their Thai replies now end with ครับ; no logic changed), then the web app. Test: `npm run test:notify`.
 
 ## Troubleshooting
 

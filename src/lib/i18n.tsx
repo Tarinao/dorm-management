@@ -493,6 +493,8 @@ const D = {
   'res.line_hint': ['Asked in the LINE chat. Call the guest, choose a room, then confirm.', 'ขอผ่านแชท LINE โทรหาผู้จอง เลือกห้อง แล้วกดยืนยัน'],
   'res.confirm': ['Confirm', 'ยืนยันการจอง'],
   'res.confirmed_ok': ['Reservation confirmed', 'ยืนยันการจองแล้ว'],
+  'notify.sent': ['LINE message sent to the guest', 'ส่งข้อความ LINE ถึงผู้จองแล้ว'],
+  'notify.failed': ['but the LINE message could not be sent', 'แต่ส่งข้อความ LINE ไม่สำเร็จ'],
   'res.need_room': ['Choose a room first (Edit).', 'ต้องเลือกห้องก่อน (แก้ไข)'],
   'res.cancel': ['Cancel booking', 'ยกเลิกการจอง'],
   'res.cancel_title': ['Cancel the reservation of {name}?', 'ยกเลิกการจองของ {name}?'],

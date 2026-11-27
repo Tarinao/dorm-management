@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import {
-  deleteViewing, linkViewingReservation, reservationRulesData, saveViewing, setViewingStatus, TIMES_OF_DAY,
+  deleteViewing, linkViewingReservation, notifyConfirmed, reservationRulesData, saveViewing, setViewingStatus, TIMES_OF_DAY,
   type Viewing, type ViewingStatus, type ViewingWithRoom,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -9,7 +9,7 @@ import { useFeedback } from '../lib/feedback';
 import { todayISO } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { useLoad } from '../lib/useLoad';
-import { LoadState, StatusPill } from './common';
+import { confirmToast, LoadState, StatusPill } from './common';
 import { LineAvatar } from './Avatar';
 import { ReservationDialog } from './Reservations';
 import { AlertBar, Btn, BtnRow, Field, FormGrid, Modal, ModalClose } from './ui';
@@ -96,6 +96,16 @@ export function ViewingCard({ v, onChanged }: { v: ViewingWithRoom; onChanged: (
     try { await fn(); toast(ok); onChanged(); } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
   };
   const status = (s: ViewingStatus) => run(() => setViewingStatus(v.id, s), t('vw.status_ok'));
+  // Confirm also tells the guest on LINE (when they booked through the bot).
+  const confirmIt = async () => {
+    setBusy(true);
+    try {
+      await setViewingStatus(v.id, 'confirmed');
+      const sent = v.line_user_id ? await notifyConfirmed('viewing', v.id) : null;
+      toast(...confirmToast(t('vw.status_ok'), sent, t));
+      onChanged();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
   const cancelIt = async () => {
     if (!(await confirm({ title: t('vw.cancel_title', { name: v.guest_name }), confirmLabel: t('vw.cancel'), danger: true }))) return;
     await status('cancelled');
@@ -136,7 +146,7 @@ export function ViewingCard({ v, onChanged }: { v: ViewingWithRoom; onChanged: (
       </div>
       {(open || canReserve || isAdmin) && (
         <BtnRow className="mt-3">
-          {v.status === 'requested' && <Btn small disabled={busy} onClick={() => void status('confirmed')}>{t('vw.confirm')}</Btn>}
+          {v.status === 'requested' && <Btn small disabled={busy} onClick={() => void confirmIt()}>{t('vw.confirm')}</Btn>}
           {open && <Btn small variant="secondary" disabled={busy} onClick={() => void status('viewed')}>{t('vw.viewed')}</Btn>}
           {open && <Btn small variant="secondary" disabled={busy} onClick={() => void status('no_show')}>{t('vw.no_show')}</Btn>}
           {canReserve && <Btn small variant="secondary" disabled={busy} onClick={() => setReserving(true)}>{t('vw.reserve')}</Btn>}

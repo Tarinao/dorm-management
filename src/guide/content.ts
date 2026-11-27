@@ -121,6 +121,7 @@ export const GUIDE: readonly GuideSection[] = [
     steps: [
       ['Requests from the LINE chat ("Book a viewing") appear in "Viewings" as "Requested", with the day and the time of day they chose.', 'คำขอจากแชท LINE ("นัดดูห้อง") จะขึ้นในหน้า "นัดดูห้อง" เป็น "ขอนัด" พร้อมวันและช่วงเวลาที่ลูกค้าเลือก'],
       ['Call the guest to agree the exact time. Tap "Edit", fill in the exact time (and the room to show, if you know it), then tap "Confirm".', 'โทรหาลูกค้าเพื่อตกลงเวลา แตะ "แก้ไข" กรอกเวลาที่นัด (และห้องที่จะพาดู ถ้าทราบ) แล้วแตะ "ยืนยันนัด"'],
+      ['If the guest booked through LINE, they get a LINE message with the date and time as soon as you tap "Confirm". So fill in the exact time first.', 'ถ้าลูกค้านัดผ่าน LINE ลูกค้าจะได้รับข้อความ LINE พร้อมวันและเวลาทันทีที่แตะ "ยืนยันนัด" จึงควรกรอกเวลาที่นัดก่อน'],
       ['Someone asked by phone or walked in? Tap "New viewing" and type their name, phone and day.', 'ลูกค้าโทรมาหรือเดินเข้ามาถาม แตะ "นัดดูห้องใหม่" แล้วกรอกชื่อ เบอร์โทร และวันที่'],
       ['After the visit tap "Viewed", or "No-show" if they did not come. Viewings whose day has passed get an orange border until you do.', 'หลังลูกค้ามาดูห้อง แตะ "ดูห้องแล้ว" หรือ "ไม่มาตามนัด" ถ้าไม่มา นัดที่เลยวันแล้วจะมีกรอบสีส้มจนกว่าจะกด'],
       ['If they want the room, tap "Reserve a room": the reservation form opens with their name and phone.', 'ถ้าลูกค้าต้องการห้อง แตะ "จองห้อง" ฟอร์มการจองจะเปิดพร้อมชื่อและเบอร์โทร'],
@@ -137,6 +138,7 @@ export const GUIDE: readonly GuideSection[] = [
       ['Type the guest’s name, phone and move-in date. The booking expires 7 days after that date unless you change it.', 'กรอกชื่อ เบอร์โทร และวันย้ายเข้าของผู้จอง การจองจะหมดอายุ 7 วันหลังวันนั้น ถ้าไม่เปลี่ยน'],
       ['If the guest paid a booking fee, type the amount, the date and Cash or Transfer. A receipt number (B-…) is made; tap it to print.', 'ถ้าผู้จองจ่ายค่าจอง กรอกจำนวนเงิน วันที่ และเงินสดหรือโอน ระบบจะออกเลขใบเสร็จ (B-…) แตะเพื่อพิมพ์'],
       ['Tap "Confirm" when the booking is sure. A vacant room turns "Reserved".', 'แตะ "ยืนยันการจอง" เมื่อการจองแน่นอนแล้ว ห้องว่างจะเปลี่ยนเป็น "จองแล้ว"'],
+      ['If the booking came from LINE, the guest gets a LINE message with the room, move-in date and how long the room is held.', 'ถ้าการจองมาจาก LINE ผู้จองจะได้รับข้อความ LINE แจ้งห้อง วันย้ายเข้า และวันที่เก็บห้องไว้ให้'],
       ['After a viewing, tap "Reserve a room" on it in "Viewings": the name and phone are filled in for you.', 'หลังลูกค้าดูห้องแล้ว แตะ "จองห้อง" ที่นัดนั้นในหน้า "นัดดูห้อง" ชื่อและเบอร์โทรจะถูกกรอกให้'],
       ['On move-in day tap "Convert to move-in". The check-in form opens with the name, phone and date filled in, and the paid booking fee counts toward the deposit.', 'วันย้ายเข้า แตะ "ย้ายเข้าจากการจอง" ฟอร์มทำสัญญาจะเปิดพร้อมชื่อ เบอร์โทร และวันที่ และค่าจองที่จ่ายแล้วจะนับเป็นส่วนหนึ่งของเงินประกัน'],
       ['If the guest booked through LINE, their LINE account is linked to the room at check-in, so they do not need to connect their room in the bot.', 'ถ้าผู้จองจองผ่าน LINE บัญชี LINE ของเขาจะเชื่อมกับห้องให้ตอนย้ายเข้า ไม่ต้องเชื่อมต่อห้องในบอทอีก'],

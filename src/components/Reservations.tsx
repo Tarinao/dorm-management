@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
-  deleteReservation, reservationRulesData, saveReservation, setReservationStatus,
+  deleteReservation, notifyConfirmed, reservationRulesData, saveReservation, setReservationStatus,
   type Reservation, type ReservationWithRoom,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -10,7 +10,7 @@ import { parseNum, todayISO } from '../lib/format';
 import { friendlyError, useI18n, type TKey } from '../lib/i18n';
 import { defaultExpiry, isActive, reservationBlocker } from '../lib/reservations';
 import { useLoad } from '../lib/useLoad';
-import { LoadState, NumInput, StatusPill } from './common';
+import { confirmToast, LoadState, NumInput, StatusPill } from './common';
 import { LineAvatar } from './Avatar';
 import { IconReceipt } from './icons';
 import { AlertBar, Btn, BtnRow, Desc, Field, FormGrid, Modal, ModalClose } from './ui';
@@ -58,7 +58,9 @@ export function ReservationDialog({ reservation, roomId, prefill, onClose, onSav
         note: s('note'),
         ...(!self && prefill?.line_user_id ? { line_user_id: prefill.line_user_id } : {}),
       }, confirmNow);
-      toast(t('res.saved'));
+      // A new booking saved as confirmed (e.g. "Reserve a room" from a LINE viewing) tells the guest on LINE.
+      const sent = !self && saved.status === 'confirmed' && saved.line_user_id ? await notifyConfirmed('reservation', saved.id) : null;
+      toast(...confirmToast(t('res.saved'), sent, t));
       onSaved(saved);
     } catch (e) { toast(friendlyError(e, t), 'error'); setBusy(false); }
   };
@@ -140,7 +142,17 @@ export function ReservationCard({ r, roomNumber, onChanged, showRoom = true }: {
     setBusy(true);
     try { await fn(); toast(ok); onChanged(); } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
   };
-  const confirmIt = () => (r.room_id ? run(() => setReservationStatus(r.id, 'confirmed'), t('res.confirmed_ok')) : toast(t('res.need_room'), 'error'));
+  // Confirm also tells the guest on LINE (when the booking came with a LINE account).
+  const confirmIt = async () => {
+    if (!r.room_id) { toast(t('res.need_room'), 'error'); return; }
+    setBusy(true);
+    try {
+      await setReservationStatus(r.id, 'confirmed');
+      const sent = r.line_user_id ? await notifyConfirmed('reservation', r.id) : null;
+      toast(...confirmToast(t('res.confirmed_ok'), sent, t));
+      onChanged();
+    } catch (e) { toast(friendlyError(e, t), 'error'); } finally { setBusy(false); }
+  };
   const cancelIt = async () => {
     if (!(await confirm({ title: t('res.cancel_title', { name: r.guest_name }), body: t('res.cancel_body'), confirmLabel: t('res.cancel'), danger: true }))) return;
     await run(() => setReservationStatus(r.id, 'cancelled'), t('res.cancelled_ok'));

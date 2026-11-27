@@ -178,7 +178,7 @@ export function reminderMessage(b: Pick<BillForMessage, 'room' | 'tenant' | 'mon
     billGreeting(b.room, b.tenant),
     `แจ้งเตือนค่าเช่าเดือน ${monthName(b.month, 'th')}`,
     `ยอดคงเหลือ ${baht(b.balance)} ครบกำหนด ${dmy(b.due_date, 'th')}${late ? ' (เลยกำหนดแล้ว)' : ''}`,
-    'หากชำระแล้ว กรุณาส่งรูปสลิปในแชทนี้ ขอบคุณค่ะ',
+    'หากชำระแล้ว กรุณาส่งรูปสลิปในแชทนี้ ขอบคุณครับ',
     '',
     `Reminder: room ${b.room}, ${monthName(b.month, 'en')}`,
     `Balance ${baht(b.balance)}, due ${dmy(b.due_date, 'en')}${late ? ' (overdue)' : ''}`,
@@ -224,12 +224,12 @@ export const PAY_REPLY = {
   ].join('\n'),
   notReady:
     'ขออภัย ยังไม่มีข้อมูลสำหรับวิธีชำระนี้ กรุณาเลือกวิธีอื่นหรือติดต่อสำนักงาน\nSorry, this payment option is not set up yet. Please choose another one or contact the office.',
-  paid: 'บิลนี้ชำระครบแล้ว ขอบคุณค่ะ\nThis bill is fully paid. Thank you.',
+  paid: 'บิลนี้ชำระครบแล้ว ขอบคุณครับ\nThis bill is fully paid. Thank you.',
   notYours: 'ไม่พบบิลนี้สำหรับบัญชี LINE ของคุณ กรุณาติดต่อสำนักงาน\nThis bill was not found for your LINE account. Please contact the office.',
 } as const;
 
 export const SLIP_REPLY = {
-  received: 'ได้รับสลิปแล้ว เจ้าหน้าที่จะตรวจสอบและยืนยันให้ ขอบคุณค่ะ\nSlip received. Staff will check and confirm it. Thank you.',
+  received: 'ได้รับสลิปแล้ว เจ้าหน้าที่จะตรวจสอบและยืนยันให้ ขอบคุณครับ\nSlip received. Staff will check and confirm it. Thank you.',
   duplicate: 'สลิปนี้เคยส่งมาแล้ว เจ้าหน้าที่จะตรวจสอบให้\nThis slip was sent before. Staff will check it.',
 } as const;
 

@@ -15,7 +15,8 @@
     "test:promptpay": "node scripts/test-promptpay.ts",
     "test:bot": "node scripts/test-bot.ts",
     "test:reservations": "node scripts/test-reservations.ts",
-    "test": "npm run test:billing && npm run test:guide && npm run test:line && npm run test:promptpay && npm run test:bot && npm run test:reservations",
+    "test:notify": "node scripts/test-notify.ts",
+    "test": "npm run test:billing && npm run test:guide && npm run test:line && npm run test:promptpay && npm run test:bot && npm run test:reservations && npm run test:notify",
     "richmenu:png": "node scripts/line-rich-menu.ts",
     "richmenu:create": "node scripts/line-rich-menu.ts --create"
   },
