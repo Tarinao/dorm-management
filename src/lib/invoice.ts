@@ -23,7 +23,7 @@ export interface InvoiceBill {
 
 export interface InvoiceDorm {
   name: string; name_en: string; address: string; tax_id: string; phone: string; email: string;
-  line_oa_id: string; invoice_note: string;
+  line_oa_id: string; invoice_note: string; biller_name: string;
   bank_name: string; bank_branch: string; bank_account_name: string; bank_account_number: string; promptpay_id: string;
   logo: string | null;           // image URL (signed URL in the app, data: URL from the Edge Function)
 }

@@ -69,7 +69,7 @@ const data: InvoiceData = {
   tenant: { full_name: 'Somchai Jaidee', address: '', phone: '0811111111' },
   dorm: {
     name: 'หอพักตัวอย่าง', name_en: 'Example Dorm', address: '', tax_id: '', phone: '085-000-0000', email: '', line_oa_id: '@exampledorm',
-    invoice_note: '', bank_name: 'กสิกรไทย', bank_branch: 'สาทร', bank_account_name: 'Example Dorm', bank_account_number: '123-4-56789-0',
+    invoice_note: '', biller_name: 'สมศรี ใจดี', bank_name: 'กสิกรไทย', bank_branch: 'สาทร', bank_account_name: 'Example Dorm', bank_account_number: '123-4-56789-0',
     promptpay_id: '0850000000', logo: null,
   },
 };

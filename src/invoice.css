@@ -75,6 +75,7 @@
 .inv-note { margin-top: 3mm; min-height: 8mm; white-space: pre-line; }
 .inv-sign { margin-top: 8mm; display: flex; justify-content: flex-end; }
 .inv-sign div { text-align: center; }
+.inv-biller { margin-top: 1mm; }
 .inv-grow { flex: 1; }
 .inv-footer { text-align: center; font-size: 9.5pt; border-top: 1px solid #000; padding-top: 2.5mm; margin-top: 4mm; }
 .inv-footer p { margin: 0; }

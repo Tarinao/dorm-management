@@ -710,7 +710,7 @@ export async function getInvoice(billId: string): Promise<InvoiceData | null> {
 export function dormForInvoice(s: Settings, logo: string | null): InvoiceDorm {
   return {
     name: s.dorm_name, name_en: s.dorm_name_en, address: s.address, tax_id: s.tax_id, phone: s.office_phone, email: s.email,
-    line_oa_id: s.line_oa_id, invoice_note: s.invoice_note, bank_name: s.bank_name, bank_branch: s.bank_branch,
+    line_oa_id: s.line_oa_id, invoice_note: s.invoice_note, biller_name: s.biller_name, bank_name: s.bank_name, bank_branch: s.bank_branch,
     bank_account_name: s.bank_account_name, bank_account_number: s.bank_account_number, promptpay_id: s.promptpay_id, logo,
   };
 }

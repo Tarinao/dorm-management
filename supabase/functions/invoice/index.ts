@@ -32,7 +32,7 @@ const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
 
 const BILL_COLS = 'id, invoice_no, month, rent_month, usage_month, room_number, contract_id, rent, common_fee, ' +
   'water_people, water_per_person, water_amount, elec_prev, elec_curr, elec_units, elec_amount, total, due_date, created_at, note, issued_by_name';
-const SETTINGS_COLS = 'dorm_name, dorm_name_en, address, tax_id, office_phone, email, line_oa_id, invoice_note, ' +
+const SETTINGS_COLS = 'dorm_name, dorm_name_en, address, tax_id, office_phone, email, line_oa_id, invoice_note, biller_name, ' +
   'bank_name, bank_branch, bank_account_name, bank_account_number, promptpay_id, logo_path';
 
 Deno.serve(async (req) => {
@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       dorm: {
         name: s.dorm_name ?? '', name_en: s.dorm_name_en ?? '', address: s.address ?? '', tax_id: s.tax_id ?? '',
         phone: s.office_phone ?? '', email: s.email ?? '', line_oa_id: s.line_oa_id ?? '', invoice_note: s.invoice_note ?? '',
+        biller_name: s.biller_name ?? '',
         bank_name: s.bank_name ?? '', bank_branch: s.bank_branch ?? '', bank_account_name: s.bank_account_name ?? '',
         bank_account_number: s.bank_account_number ?? '', promptpay_id: s.promptpay_id ?? '',
         logo: s.logo_path ? await logoDataUrl(s.logo_path) : null,

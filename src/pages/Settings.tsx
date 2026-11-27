@@ -292,7 +292,7 @@ function InvoiceForm({ s, logo, onSaved }: { s: SettingsRow; logo: string | null
     try {
       await updateSettings({
         dorm_name_en: v('dorm_name_en'), address: v('address'), tax_id: v('tax_id'), email: v('email'),
-        line_oa_id: oa && !oa.startsWith('@') ? '@' + oa : oa, invoice_note: v('invoice_note'),
+        line_oa_id: oa && !oa.startsWith('@') ? '@' + oa : oa, invoice_note: v('invoice_note'), biller_name: v('biller_name'),
       });
       toast(t('common.saved'));
       onSaved();
@@ -345,6 +345,7 @@ function InvoiceForm({ s, logo, onSaved }: { s: SettingsRow; logo: string | null
           <Field label={t('settings.email')}><input name="email" type="email" maxLength={200} defaultValue={s.email} /></Field>
           <Field label={t('settings.line_oa_id')} hint={t('settings.line_oa_hint')}><input name="line_oa_id" maxLength={41} placeholder="@yourdorm" defaultValue={s.line_oa_id} /></Field>
           <Field label={t('settings.invoice_phone')}><input value={s.office_phone} readOnly disabled /></Field>
+          <Field label={t('settings.biller_name')} hint={t('settings.biller_name_hint')}><input name="biller_name" maxLength={100} defaultValue={s.biller_name} /></Field>
           <Field label={t('settings.invoice_note')} className="col-span-full"><textarea name="invoice_note" rows={2} maxLength={1000} defaultValue={s.invoice_note} /></Field>
         </FormGrid>
         <Btn type="submit" disabled={busy}>{busy ? t('common.saving') : t('settings.invoice_save')}</Btn>

@@ -72,6 +72,7 @@ export function InvoiceView({ data }: { data: InvoiceData }) {
       <div className="inv-sign">
         <div>
           <div>ลงชื่อ ...................................................... ผู้วางบิล</div>
+          {d.biller_name && <div className="inv-biller">({d.biller_name})</div>}
           <div className="inv-small">(Biller)</div>
         </div>
       </div>

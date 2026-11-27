@@ -335,6 +335,8 @@ const D = {
   'settings.line_oa_hint': ['e.g. @yourdorm', 'เช่น @yourdorm'],
   'settings.invoice_phone': ['Phone (the office phone in LINE info)', 'เบอร์โทร (เบอร์สำนักงานในข้อมูลสำหรับ LINE)'],
   'settings.invoice_note': ['Note on every invoice', 'หมายเหตุบนใบแจ้งหนี้ทุกใบ'],
+  'settings.biller_name': ['Biller name', 'ชื่อผู้วางบิล'],
+  'settings.biller_name_hint': ['Printed under the signature line (ผู้วางบิล) of every invoice', 'แสดงใต้เส้นลงชื่อ (ผู้วางบิล) บนใบแจ้งหนี้ทุกใบ'],
   'settings.invoice_save': ['Save invoice details', 'บันทึกข้อมูลใบแจ้งหนี้'],
   'settings.water_price_old': ['Water per person — old customer (฿)', 'ค่าน้ำต่อคน — ลูกค้าเก่า (บาท)'],
   'settings.water_price_new': ['Water per person — new customer (฿)', 'ค่าน้ำต่อคน — ลูกค้าใหม่ (บาท)'],
