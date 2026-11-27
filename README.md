@@ -59,7 +59,7 @@ All tables, security rules and functions are in `supabase/migrations/`. Apply th
 | `20261127071400_move_in_line.sql` | `move_in()` from a reservation links the reservation's LINE account to the new tenant (like an approved link request), unless that account belongs to a current tenant. No new tables. Applied 2026-11-27 |
 | `20261127111701_billing_period_invoice.sql` | New billing period (bill of month M = rent + common fee for M, water + electric for M-1; first and final bills), one bill per contract and month, `settings.common_fee` (300) copied onto each bill and included in every total, invoice numbers `INV` + YYYYMM + 6 digits, invoice details in Settings, `tenants.address`, private "branding" bucket for the logo, `invoice_links` (hashed LINE invoice tokens, service role only). Existing bills keep their totals. Applied 2026-11-27 |
 | `20261127113555_bill_due_date.sql` | A new bill is due on the due day of its month, or on the day it is made if that is later, so it is never overdue the moment it is made. Bills already made keep their due date. Applied 2026-11-27 |
-| `20261127140000_biller_name.sql` | `settings.biller_name`: the name printed under the signature line (ผู้วางบิล) of every invoice, typed in Settings → Invoice details. **Not applied yet** |
+| `20261127114748_biller_name.sql` | `settings.biller_name`: the name printed under the signature line (ผู้วางบิล) of every invoice, typed in Settings → Invoice details. Applied 2026-11-27 (`invoice` v3) |
 
 **Option A: SQL editor (no tools to install).** In Supabase open **SQL Editor → New query**. Paste the whole content of the first file, click **Run**, and repeat for each file in order.
 

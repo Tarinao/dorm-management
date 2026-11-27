@@ -53,7 +53,7 @@ type BotSettings = { office_phone: string; location_lat: number | null; location
 /* 0016 */
 type InvoiceSettings = {
   common_fee: number; dorm_name_en: string; address: string; tax_id: string; email: string; line_oa_id: string;
-  invoice_note: string; logo_path: string | null; biller_name: string; // + 20261127140000
+  invoice_note: string; logo_path: string | null; biller_name: string; // + 20261127114748
 };
 type BillInvoice = {
   rent_month: string | null; usage_month: string | null; common_fee: number; invoice_no: string; issued_by_name: string;
